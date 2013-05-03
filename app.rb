@@ -39,7 +39,7 @@ def parse_logfmt(str)
   hash[:ps_name] = hash[:dyno].split(".")[0] if hash[:dyno]
   
 
-  pairs = CSV::parse_line(logs.split, {:col_sep => " "})
+  pairs = logs.split " "
   pairs.map do |val|
     if val.contains("=")
       pair = val.split "="
