@@ -1,8 +1,7 @@
 require 'rubygems'
 require 'sinatra'
-require '@neography'
+require 'neography'
 require 'net/http'
-require 'json'
 
 @neo4j_uri = URI(ENV['@neo4J_URL'] || 'http://localhost:7474') # This is how Heroku tells us about the app.
 @neo = neography::Rest.new(@neo4j_uri.to_s) # @neography expects a string
