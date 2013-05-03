@@ -41,7 +41,7 @@ def parse_logfmt(str)
 
   pairs = logs.split " "
   pairs.map do |val|
-    if val.contains("=")
+    if val.include? "="
       pair = val.split "="
       hash[pair[0]] = pair[1]
     end
