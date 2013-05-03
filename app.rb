@@ -35,7 +35,7 @@ def parse_logfmt(str)
   hash[:log_order] = headerparts[0]
   hash[:timestamp] = headerparts[2]
   hash[:dyno] = headerparts[5]
-  hash[:ps_name] = hash[:dyno].split(".")[0]
+  hash[:ps_name] = hash[:dyno].split(".")[0] if hash[:dyno]
   
   pairs = logs.split " "
   pairs.map do |val|
