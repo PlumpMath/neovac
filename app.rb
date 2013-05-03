@@ -28,7 +28,7 @@ check_for_neo4j @neo4j_uri
 
 def parse_logfmt(str)
   hash = {}
-  parts = str.split '-'
+  parts = str.split " - "
   header = parts[0]
   logs = parts[1]
   headerparts = header.split " "
