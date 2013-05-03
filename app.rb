@@ -81,8 +81,9 @@ def dot(left,right)
 end
 
 post '/' do
-  logfmt = parse_logfmt request.body
-  puts request.body
+  body = request.body.read
+  puts body
+  logfmt = parse_logfmt body 
   addLog logfmt
 end
 
