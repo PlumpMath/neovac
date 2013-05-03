@@ -3,8 +3,8 @@ require 'sinatra'
 require 'neography'
 require 'net/http'
 
-@neo4j_uri = URI(ENV['@neo4J_URL'] || 'http://localhost:7474') # This is how Heroku tells us about the app.
-@neo = neography::Rest.new(@neo4j_uri.to_s) # @neography expects a string
+@neo4j_uri = URI(ENV['NEO4J_URL'] || 'http://localhost:7474') # This is how Heroku tells us about the app.
+@neo = Neography::Rest.new(@neo4j_uri.to_s) # @neography expects a string
 
 
 def check_for_neo4j(neo4j_uri)
@@ -23,7 +23,7 @@ def check_for_neo4j(neo4j_uri)
   puts "all of the things are wonderful and @neo4j has been found"
 end
 
-check_for_neo4j
+check_for_neo4j @neo4j_uri
 
 def parse_logfmt(str)
   pairs = str.split " "
