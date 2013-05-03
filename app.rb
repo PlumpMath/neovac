@@ -38,11 +38,8 @@ def parse_logfmt(str)
   hash[:dyno] = headerparts[5]
   hash[:ps_name] = hash[:dyno].split(".")[0] if hash[:dyno]
   
-  puts logs
   pairs = logs.split " "
-  puts pairs
   pairs.map do |val|
-    puts val
     if val.include? "="
       pair = val.split "="
       hash[pair[0]] = pair[1]
@@ -77,7 +74,7 @@ def createCompNode(at)
   agg = atComps[0]
   atComps.map do |comp|
     agg = dot agg, comp
-    @neo.create_unique_node("components", agg)
+    comp = @neo.create_unique_node("components", agg)
   end 
 end
 
@@ -103,7 +100,6 @@ puts @neo
 
 post '/' do
   body = request.body.read
-  puts body
   logfmt = parse_logfmt body 
   if logfmt[:xid] && logfmt[:at]
     addLog logfmt
