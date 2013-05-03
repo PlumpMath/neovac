@@ -103,6 +103,8 @@ post '/' do
   body = request.body.read
   puts body
   logfmt = parse_logfmt body 
-  addLog logfmt
+  if logfmt[:xid] && logfmt[:at]
+    addLog logfmt
+  end
 end
 
