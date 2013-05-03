@@ -9,9 +9,9 @@ require 'net/http'
 
 def check_for_neo4j(neo4j_uri)
   begin
-    http = Net::HTTP.new(@neo4j_rui.host, @neo4j_uri.port)
-    request = Net::HTTP::Get.new(@neo4j_uri.request_uri)
-    request.basic_auth(@neo4j_uri.user, @neo4j_uri.password) if (@neo4j_uri.user)
+    http = Net::HTTP.new(neo4j_uri.host, neo4j_uri.port)
+    request = Net::HTTP::Get.new(neo4j_uri.request_uri)
+    request.basic_auth(neo4j_uri.user, neo4j_uri.password) if (neo4j_uri.user)
     response = http.request(request)
 
     if response.code != '200'
