@@ -26,12 +26,23 @@ end
 check_for_neo4j @neo4j_uri
 
 def parse_logfmt(str)
-  pairs = str.split " "
   hash = {}
+  parts = str.split '-'
+  header = parts[0]
+  logs = parts[1]
+  headerparts = header.split " "
+  
+  hash[:log_order] = headerparts[0]
+  hash[:timestamp] = headerparts[2]
+  hash[:dyno] = headerparts[5]
+  hash[:ps_name] = hash[:dyno].split(".")[0]
+  
+  pairs = logs.split " "
   pairs.map do |val|
     pair = val.split "="
     hash[pair[0]] = pair[1]
   end
+  puts hash.inspect
   hash
 end
 
