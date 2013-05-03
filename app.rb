@@ -55,6 +55,8 @@ end
 
 def addLog(logHash)
   logNode = @neo.create_node(logHash)
+  puts logNode
+  puts "created Node"
   createCompNode(logHash["at"])
   createXidNode(logHash["xid"])
   linkNodes(logHash["at"], logHash["xid"], logNode)
@@ -101,7 +103,7 @@ puts @neo
 post '/' do
   body = request.body.read
   logfmt = parse_logfmt body 
-  if logfmt[:xid] && logfmt[:at]
+  if logfmt["xid"] && logfmt["at"]
     addLog logfmt
   end
 end
