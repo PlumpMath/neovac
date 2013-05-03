@@ -2,6 +2,7 @@ require 'rubygems'
 require 'sinatra'
 require 'neography'
 require 'net/http'
+require 'csv'
 
 @neo4j_uri = URI(ENV['NEO4J_URL'] || 'http://localhost:7474') # This is how Heroku tells us about the app.
 @neo = Neography::Rest.new(@neo4j_uri.to_s) # @neography expects a string
@@ -37,10 +38,13 @@ def parse_logfmt(str)
   hash[:dyno] = headerparts[5]
   hash[:ps_name] = hash[:dyno].split(".")[0] if hash[:dyno]
   
-  pairs = logs.split " "
+
+  pairs = CSV::parse_line(logs.split, {:col_sep => " "})
   pairs.map do |val|
-    pair = val.split "="
-    hash[pair[0]] = pair[1]
+    if val.contains("=")
+      pair = val.split "="
+      hash[pair[0]] = pair[1]
+    end
   end
   puts hash.inspect
   hash
