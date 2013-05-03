@@ -59,7 +59,7 @@ def createCompNode(at)
   atComps = splitAt at
   agg = atComps[0]
   atComps.map do |comp|
-    agg = dot agg comp
+    agg = dot agg, comp
     @neo.create_unique_node("components", agg)
   end 
 end
@@ -72,6 +72,8 @@ def linkNodes(at,xid,logNode)
   @neo.create_relationship("logged", xidNode, logNode)
 end
 
+
+
 def dot(left,right)
   if left
     return left + "." + right
@@ -79,6 +81,8 @@ def dot(left,right)
     return right
   end
 end
+
+puts @neo
 
 post '/' do
   body = request.body.read
