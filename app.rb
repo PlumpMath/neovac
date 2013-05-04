@@ -103,8 +103,10 @@ puts @neo
 post '/' do
   body = request.body.read
   logfmt = parse_logfmt body 
-  if logfmt["xid"] && logfmt["at"]
+  if logfmt.has_key?("xid") && logfmt.has_key?("at")
     addLog logfmt
+  else
+    "does not have things needed"
   end
 end
 
