@@ -78,7 +78,7 @@ def createCompNode(at)
   agg = atComps[0]
   atComps.map do |comp|
     agg = dot agg, comp
-    comp = $neo.create_unique_node("components", agg)
+    comp = $neo.create_unique_node("components","name", agg)
   end 
 end
 
