@@ -58,7 +58,9 @@ def addLog(logHash)
   puts logNode
   puts "created Node"
   createCompNode(logHash["at"])
-  createXidNode(logHash["xid"])
+  if logHash["xid"]
+    createXidNode(logHash["xid"])
+  end
   linkNodes(logHash["at"], logHash["xid"], logNode)
 end 
 
@@ -83,9 +85,13 @@ end
 
 def linkNodes(at,xid,logNode)
   comp = @neo.get_node_index("components","name",at)
-  xidNode  = @neo.get_node_index("xids", "val", xid) 
+  if xid
+    xidNode  = @neo.get_node_index("xids", "val", xid) 
+    @neo.create_relationship("logged", xidNode, logNode)
+  end 
   @neo.create_relationship("logged", comp, logNode)
-  @neo.create_relationship("logged", xidNode, logNode)
+  
+  
 end
 
 
@@ -103,10 +109,10 @@ puts @neo
 post '/' do
   body = request.body.read
   logfmt = parse_logfmt body 
-  if logfmt.has_key?("xid") && logfmt.has_key?("at")
+  if logfmt.has_key?("at")
     addLog logfmt
   else
-    "does not have things needed"
+    puts "does not have things needed"
   end
 end
 
