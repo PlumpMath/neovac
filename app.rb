@@ -29,15 +29,18 @@ check_for_neo4j $neo4j_uri
 def parse_logfmt(str)
   hash = {}
   parts = str.split " - "
-  header = parts[0]
-  logs = parts[1]
-  headerparts = header.split " "
-  
-  hash[:log_order] = headerparts[0]
-  hash[:timestamp] = headerparts[2]
-  hash[:dyno] = headerparts[5]
-  hash[:ps_name] = hash[:dyno].split(".")[0] if hash[:dyno]
-  
+  if parts.length > 1
+    header = parts[0]
+    logs = parts[1]
+    headerparts = header.split " "
+    
+    hash[:log_order] = headerparts[0]
+    hash[:timestamp] = Time.parse(headerparts[2])
+    hash[:dyno] = headerparts[5]
+    hash[:ps_name] = hash[:dyno].split(".")[0] if hash[:dyno]
+  else
+    logs = parts[0]
+  end
   pairs = logs.split " "
   pairs.map do |val|
     if val.include? "="
@@ -57,11 +60,15 @@ def addLog(logHash)
   logNode = $neo.create_node(logHash)
   puts logNode
   puts "created Node"
-  createCompNode(logHash["at"])
   if logHash["xid"]
     createXidNode(logHash["xid"])
+    linkXid(logHash["xid"],logNode)
   end
-  linkNodes(logHash["at"], logHash["xid"], logNode)
+  
+  if logHash["at"]
+    createCompNode(logHash["at"])
+    linkCompNodes(logHash["at"],  logNode)
+  end
 end 
 
 def init
@@ -73,7 +80,7 @@ def createXidNode(xid)
   $neo.create_unique_node("xid", "val", xid)
 end 
 
-def createCompNode(at)
+def createCompNodes(at)
   atComps = splitAt at
   agg = atComps[0]
   atComps.map do |comp|
@@ -82,19 +89,15 @@ def createCompNode(at)
   end 
 end
 
-
-def linkNodes(at,xid,logNode)
+def linkComp(at,logNode) 
   comp = $neo.get_node_index("components","name",at)
-  if xid
-    xidNode  = $neo.get_node_index("xids", "val", xid) 
-    $neo.create_relationship("logged", xidNode, logNode)
-  end 
-  $neo.create_relationship("logged", comp, logNode)
-  
-  
+  $neo.create_relationship("logged", comp, logNode) 
 end
 
-
+def linkXid(xid, logNode)
+  xidNode  = $neo.get_node_index("xid", "val", xid) 
+  $neo.create_relationship("logged", xidNode, logNode)
+end
 
 def dot(left,right)
   if left
@@ -104,15 +107,12 @@ def dot(left,right)
   end
 end
 
-puts $neo
+def processLog(log)
+  logfmt = parse_logfmt body 
+  addLog logfmt
+end
 
 post '/' do
-  body = request.body.read
-  logfmt = parse_logfmt body 
-  if logfmt.has_key?("at")
-    addLog logfmt
-  else
-    puts "does not have things needed"
-  end
+  processLog request.body.read
 end
 
