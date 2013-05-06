@@ -28,6 +28,9 @@ check_for_neo4j $neo4j_uri
 
 def parse_logfmt(str)
   hash = {}
+  if str == ""
+    return {}
+  end
   parts = str.split " - "
   if parts.length > 1
     header = parts[0]
@@ -90,13 +93,21 @@ def createCompNodes(at)
 end
 
 def linkComp(at,logNode) 
-  comp = $neo.get_node_index("components","name",at)
+  comp = getCompNode(at)
   $neo.create_relationship("logged", comp, logNode) 
 end
 
 def linkXid(xid, logNode)
-  xidNode  = $neo.get_node_index("xid", "val", xid) 
+  xidNode = getXidNode(xid)
   $neo.create_relationship("logged", xidNode, logNode)
+end
+
+def getXidNode(xid)
+  $neo.get_node_index("xid", "val", xid) 
+end
+
+def getCompNode(comp)
+  $neo.get_node_index("components","name",comp)
 end
 
 def dot(left,right)
