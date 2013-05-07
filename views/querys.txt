@@ -1,0 +1,7 @@
+
+Get all logs for a xid
+
+START n=node:xid('val:*')
+MATCH n-[:logged]->l
+with n, collect(l.message + "\n") as logs
+return n, logs

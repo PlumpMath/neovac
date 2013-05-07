@@ -1,0 +1,140 @@
+/* http://meyerweb.com/eric/tools/css/reset/
+   v2.0 | 20110126
+   License: none (public domain) */
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed,
+figure, figcaption, footer, header, hgroup,
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 100%;
+  vertical-align: baseline;
+}
+/* HTML5 display-role reset for older browsers */
+article, aside, details, figcaption, figure,
+footer, header, hgroup, menu, nav, section {
+  display: block;
+}
+body {
+  line-height: 1;
+}
+ol, ul {
+  list-style: none;
+}
+blockquote, q {
+  quotes: none;
+}
+blockquote:before, blockquote:after,
+q:before, q:after {
+  content: '';
+  content: none;
+}
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+
+/* Vacuole */
+
+body {
+  font-family: 'Helvetica Neue';
+  color: #363636;
+  line-height: 1.5;
+}
+
+h1 {
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+  font-weight: normal;
+  font-size: 2em;
+  text-align: center;
+}
+
+.results {
+  font-size: 1.2em;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50em;
+}
+
+.result {
+  margin-bottom: 2em;
+}
+
+.result a {
+  color: white;
+  text-decoration: none;
+}
+
+.result a:hover {
+  text-decoration: underline;
+}
+
+.output {
+  margin-top: .5em;
+  width: 49em;
+}
+
+.output-inner {
+  color: #F8F8F8;
+  font-family: Monaco, monospace;
+  background: url('/shell.png');
+  border-radius: .5em;
+  color: white;
+  padding-left: 1em;
+  padding-right: 1em;
+  line-height: 1.1;
+}
+
+.output pre {
+  overflow: auto;
+}
+
+.bar {
+  width: 0.4em;
+  border-radius: 0.2em;
+}
+
+.gap {
+  width: 0.6em;
+}
+
+.bar.pass {
+  background: #61B867;
+}
+
+.bar.fail {
+  background-color: #CF4F48;
+}
+
+pre::-webkit-scrollbar {
+  height: 0.6em;
+  width: 0.6;
+}
+
+pre::-webkit-scrollbar-button:start:decrement, pre::-webkit-scrollbar-button:end:increment {
+  display: none;
+}
+
+pre::-webkit-scrollbar-track-piece {
+  background: -webkit-gradient(linear, left top, left bottom, from(rgba(0, 0, 0, .3)), to(rgba(0, 0, 0, .1)));
+}
+
+pre::-webkit-scrollbar-thumb:horizontal {
+  background: -webkit-gradient(linear, left top, left bottom, from(#99a2ab), to(#6a747c));
+  -webkit-border-radius: 3px;
+  -webkit-box-shadow: 0 1px 1px rgba(0, 0, 0, .66) inset;
+  width: 25px;
+}

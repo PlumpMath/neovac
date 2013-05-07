@@ -1,0 +1,34 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+  <title>Vacuole</title>
+  <link rel="stylesheet" media="screen" type="text/css" href="/vacuole.css" />
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+  <script type="text/javascript" src="/vacuole.js"></script>
+</head>
+<body>
+
+  <h1>Vacuole</h1>
+  <div class="results">
+    <% @results["data"].each do |result| %>
+      <div class="result">
+        <table>
+          <tr>
+            <td class="bar pass">
+            <td class="gap">
+            <td class"info">
+              <p><%= result[0] %></p>
+              <div class="output">
+                <div class="output-inner">
+                  <pre><code><%= result[1].join().gsub(/\\n/,'\n') %></code></pre>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    <% end %>
+  </div>
+</body>
+</html>
