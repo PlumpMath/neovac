@@ -9,9 +9,15 @@ class Neo
   attr_accessor :neo
   
   def initialize
-    @neo4j_uri = URI(ENV['NEO4J_URL'] || 'http://localhost:7474') # This is how Heroku tells us about the app.
-    @neo = Neography::Rest.new(@neo4j_uri.to_s) # $neography expects a string
-    if !check_for_neo4j(@neo4j_uri)
+    uri = URI(ENV['NEO4J_URL'] || 'http://localhost:7474') # This is how Heroku tells us about the app.
+    @neo = Neography::Rest.new(uri.to_s) # $neography expects a string
+    Neography.configure do |config|
+      config.server = uri.host
+      config.port   = uri.port
+      config.username = uri.user
+      config.password = uri.password
+    end
+    if !check_for_neo4j(uri)
       measure("neo4j_connection_problem")
       exit 1
     end
@@ -24,11 +30,15 @@ class Neo
   def work
     iron = IronMQ::Client.new()
     queue = iron.queue("log")
+    #cluser_queue = iron.queue("cluster")
     while true
       queue.poll do |msg|
         measure "queue.got", 1
         @xid = SecureRandom.urlsafe_base64(8)
-        process_log msg.body
+        xid = process_log msg.body
+        if xid 
+          
+        end
       end
     end
   end
@@ -96,50 +106,30 @@ class Neo
     monitor "parse_log_header" do
       headerparts = header.split " "
       hash[:log_order] = headerparts[0]
-      hash[:timestamp] = Time.parse(headerparts[2])
+      hash[:timestamp] = Time.parse(headerparts[2]).to_f
       hash[:dyno] = headerparts[5]
       hash[:ps_name] = hash[:dyno].split(".")[0] if hash[:dyno]
     end
     return hash
   end
 
-  def create_comp_nodes(at)
-    monitor "create_comp_nodes" do
-      atComps = split_at at
-      agg = atComps[0]
-      atComps.map do |comp|
-        agg = dot agg, comp
-        comp = @neo.create_unique_node("components","name", agg, {"fullname" => agg, "name"=> comp})  
-      end 
-      agg = atComps[0]
-      atComps.map do |comp|
-        oldagg = agg
-        agg = dot agg, comp
-        if agg != atComps[0]
-          last = query_comp_node(oldagg)
-          this = query_comp_node(agg)
-          comp = @neo.create_relationship("owns",last,this )  
-        end
-      end 
-    end
-  end
-
-  def create_xid_node(xid) 
-    monitor "create_xid_node" do
-      @neo.create_unique_node("xid", "val", xid,{"xid" => xid})
-    end
-  end
 
   def split_at(atVal)
     atVal.split '.'
   end
+  
+ 
 
   def add_log(logHash)
     monitor "add_log" do
-      logNode = @neo.create_node(logHash)
+      logNode = Neography::Node.create(logHash)
       if logHash.has_key? "xid"
         create_xid_node(logHash["xid"])
         link_xid(logHash["xid"],logNode)
+        if logHash.has_key? "app"
+          create_app_node logHash["app"] 
+          link_app_node logHash["xid"], logHash["app"]
+        end
         measure("has_xid", 1)
       else
         measure("no_xid", 1)
@@ -153,31 +143,84 @@ class Neo
         measure("no_at",1)
       end
     end
+    if logHash.has_key? "xid"
+      return logHash["xid"]
+    end
   end 
 
+  def create_comp_nodes(at)
+    monitor "create_comp_nodes" do
+      atComps = split_at at
+      agg = atComps[0]
+      atComps.map do |comp|
+        agg = dot agg, comp
+        params = {:fullname => agg, :name => comp}
+        create_unique("components","name",agg,params)
+      end 
+    end
+  end
+
+  def create_unique(index,name, val,params)
+    begin
+      Neography::Node.find(index,name, val)
+    rescue
+      n = Neography::Node.create(params)
+      n.add_to_index(index,name,val)
+      return n
+    end
+  end
+
+  def create_xid_node(xid,params={}) 
+    monitor "create_xid_node" do
+      params["xid"] = xid
+      create_unique("xids","val",xid,params)
+    end
+  end
+  
+  def create_app_node(app, params={})
+    monitor "create_app_node" do
+      params["name"] = app
+      create_unique("app","name",app,params)
+   end
+  end
+ 
   def link_comp(at,logNode)
     monitor "link_component" do
-    comp = query_comp_node(at)
-    @neo.create_relationship("logged", comp, logNode) 
+      comp = query_comp_node(at)
+      Neography::Relationship.create(:logged, comp, logNode) 
     end
   end
 
   def link_xid(xid, logNode)
     monitor "link_xid" do
       xidNode = query_xid_node(xid)
-      @neo.create_relationship("logged", xidNode, logNode)
+      Neography::Relationship.create(:logged, xidNode, logNode)
     end
   end
 
+  def link_app_node(xid,app)
+    monitor "link_app_node" do
+      xidNode = query_xid_node xid
+      appNode = query_app_node app
+      Neography::Relationship.create :created, appNode, xidNode 
+    end
+  end
+  
   def query_xid_node(xid)
     monitor("query_xid_node") do
-      @neo.get_node_index("xid", "val", xid) 
+      Neography::Node.find("xid", "val", xid) 
+    end
+  end
+
+  def query_app_node(app)
+    monitor("query_app_node")do
+      Neography::Node.find("app","name",app)
     end
   end
 
   def query_comp_node(comp)
     monitor "query_comp_node" do
-      @neo.get_node_index("components","name",comp)
+      Neography::Node.find("components","name",comp)
     end
   end
 
@@ -195,11 +238,12 @@ class Neo
   def process_log(log)
     monitor("process_log") do
       logfmt = parse_logfmt log 
-      add_log logfmt
+      xid =add_log logfmt
+      return xid 
     end
   end
   def log_base_hash
-    hash = {:xid => @xid}
+    hash = {:xid => @xid, :app=> "neovac"}
     hash
   end
 
