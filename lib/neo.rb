@@ -18,11 +18,11 @@ class Neo
       config.password = uri.password
     end
     if !check_for_neo4j(uri)
-      measure("neo4j_connection_problem")
+      measure("neo4j_connection_problem",1)
       exit 1
     end
     if !@neo 
-      measure("no_neo4j")
+      measure("no_neo4j",1)
       exit 1
     end
   end
@@ -46,6 +46,8 @@ class Neo
   def initilize_db
     @neo.create_node_index("components")
     @neo.create_node_index("xids")
+    @neo.create_node_index("apps")
+    @neo.create_node_index("app_ids")
   end
 
   def check_for_neo4j(neo4j_uri)
@@ -122,8 +124,8 @@ class Neo
 
   def add_log(logHash)
     monitor "add_log" do
-      logNode = Neography::Node.create(logHash)
-      if logHash.has_key? "xid"
+      if logHash.has_key? "xid"  
+        logNode = Neography::Node.create(logHash)
         create_xid_node(logHash["xid"])
         link_xid(logHash["xid"],logNode)
         if logHash.has_key? "app"
@@ -131,26 +133,35 @@ class Neo
           link_app_node logHash["xid"], logHash["app"]
         end
         measure("has_xid", 1)
+        
+        if logHash.has_key? "app_id"
+          create_app_id_node(logHash["app_id"])
+          link_app_id(logHash["xid"],logHash["app_id"])
+        end
+     
+        if logHash.has_key? "at"
+          create_comp_nodes(logHash["at"])
+          link_comp(logHash["at"],  logNode)
+          measure("hes_at",1)
+        else
+          measure("no_at",1)
+        end
+
+        if logHash.has_key? "xid"
+          return logHash["xid"]
+        end
+
       else
         measure("no_xid", 1)
       end
-
-      if logHash.has_key? "at"
-        create_comp_nodes(logHash["at"])
-        link_comp(logHash["at"],  logNode)
-        measure("hes_at",1)
-      else
-        measure("no_at",1)
-      end
-    end
-    if logHash.has_key? "xid"
-      return logHash["xid"]
+      
     end
   end 
 
   def create_comp_nodes(at)
     monitor "create_comp_nodes" do
       atComps = split_at at
+      create_unique("components","name",at,{:name => at})
       agg = atComps[0]
       atComps.map do |comp|
         agg = dot agg, comp
@@ -162,11 +173,9 @@ class Neo
 
   def create_unique(index,name, val,params)
     begin
-      Neography::Node.find(index,name, val)
-    rescue
-      n = Neography::Node.create(params)
-      n.add_to_index(index,name,val)
-      return n
+        @neo.create_unique_node(index,name,val,params)
+    rescue  
+      measure("create_unique.failure",1)
     end
   end
 
@@ -181,20 +190,48 @@ class Neo
     monitor "create_app_node" do
       params["name"] = app
       create_unique("app","name",app,params)
-   end
+    end
   end
  
-  def link_comp(at,logNode)
-    monitor "link_component" do
-      comp = query_comp_node(at)
-      Neography::Relationship.create(:logged, comp, logNode) 
+  def create_app_id_node(app_id, params={})
+    monitor "create_app_id_node" do
+      params["app_id"] = app_id
+      create_unique("app_ids", "app_id",app_id,params)
     end
   end
 
+  def link_comp(at,logNode)
+    monitor "link_component" do
+      begin
+        comp = query_comp_node(at)
+        @neo.create_relationship("caused", comp, logNode) 
+      rescue
+        measure("link_component.failure",1)
+      end
+    end
+  end
+
+  def link_app_id(xid, app_id)
+    monitor "link_app_id" do
+      begin
+        xid_node = query_xid_node xid
+        app_id_node = query_app_id_node app_id 
+        @neo.create_relationship("created", app_id_node, xid_node)
+      rescue
+        measure("link_app_id.failure",1)
+      end
+    end
+  end
+
+
   def link_xid(xid, logNode)
     monitor "link_xid" do
-      xidNode = query_xid_node(xid)
-      Neography::Relationship.create(:logged, xidNode, logNode)
+      begin
+        xidNode = query_xid_node(xid)
+        @neo.create_relationship("logged", xidNode, logNode)
+      rescue
+        measure("link_xid.failure",1)
+      end
     end
   end
 
@@ -202,25 +239,51 @@ class Neo
     monitor "link_app_node" do
       xidNode = query_xid_node xid
       appNode = query_app_node app
-      Neography::Relationship.create :created, appNode, xidNode 
+      @neo.create_relationship("created", appNode, xidNode) 
     end
   end
-  
+   
+  def query_app_id_node(app_id)
+    monitor("query_app_id_node") do
+      begin
+        @neo.get_node_index("app_ids", "app_id", app_id) 
+      rescue
+        measure("query_app_id_node.not_found",1)
+        nil
+      end
+    end
+  end
+
+ 
   def query_xid_node(xid)
     monitor("query_xid_node") do
-      Neography::Node.find("xid", "val", xid) 
+      begin
+        @neo.get_node_index("xids", "val", xid) 
+      rescue
+        measure("query_xid_node.not_found",1)
+        nil
+      end
     end
   end
 
   def query_app_node(app)
     monitor("query_app_node")do
-      Neography::Node.find("app","name",app)
+      begin
+        @neo.get_node_index("app","name",app)
+      rescue
+        measure("query_app_node.not_found",1)
+      end
     end
   end
 
   def query_comp_node(comp)
     monitor "query_comp_node" do
-      Neography::Node.find("components","name",comp)
+      begin
+        @neo.get_node_index("components","name",comp)
+      rescue
+        measure("query_comp_node.not_found",1)
+        nil
+      end
     end
   end
 

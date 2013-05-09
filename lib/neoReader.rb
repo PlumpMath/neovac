@@ -9,11 +9,22 @@ class NeoReader
 
   def getRecent
     @neo.execute_query(<<-EOF)
-      START n=node:xid('val:*')
+      START n=node:xids('val:*')
       MATCH n-[:logged]->l
-      with n, collect(l.message + "\n") as logs
+      with n.xid as xid, collect(l.message + "\n") as logs
       limit 5
-      return n.xid, logs 
+      return xid, logs 
     EOF
-  end 
+  end
+
+  def get_app_id(id)
+    @neo.execute_query(<<-EOF)
+      start app=node:app_ids('app_id:#{id}')
+      match app-[:created]->x
+      with distinct(x) as xs
+      match xs-[:logged]->l
+      with xs.xid as xid,collect(l.message) as msg
+      return xid, msg  
+    EOF
+  end
 end

@@ -17,6 +17,11 @@ class Web < Sinatra::Base
     erb :results
   end
 
+  get '/app/:id' do
+    @results = $neoReader.get_app_id params[:id]
+    erb :results
+  end
+
   post '/' do
     $queue.post(request.body.read)
   end
