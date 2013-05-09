@@ -1,6 +1,7 @@
 require 'neography/tasks'
-require_relative 'app.rb'
+require './lib/neo.rb'
 
 task :init do
-  init
+  n = Neo.new
+  n.initialize_db
 end

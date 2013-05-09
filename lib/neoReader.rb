@@ -11,15 +11,23 @@ class NeoReader
     @neo.execute_query(<<-EOF)
       START n=node:xids('val:*')
       MATCH n-[:logged]->l
-      with n.xid as xid, collect(l.message + "\n") as logs
+      with n.xid as xid, collect(l.message) as logs
       limit 5
       return xid, logs 
     EOF
   end
+  
+  def get_by_app_name(name)
+    get_by("apps","name",name )
+  end
 
-  def get_app_id(id)
+  def get_by_app_id(id)
+    get_by("app_ids","app_id",id)
+  end
+
+  def get_by(index,key,val)
     @neo.execute_query(<<-EOF)
-      start app=node:app_ids('app_id:#{id}')
+      start app=node:#{index}('#{key}:#{val}')
       match app-[:created]->x
       with distinct(x) as xs
       match xs-[:logged]->l

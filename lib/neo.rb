@@ -1,4 +1,5 @@
 require './loggable.rb'
+require 'logfmt'
 require 'neography'
 require 'net/http'
 require 'iron_mq'
@@ -43,11 +44,14 @@ class Neo
     end
   end
 
-  def initilize_db
+  def initialize_db
+    puts 'doing all of the things (mostly adding indexs)'
     @neo.create_node_index("components")
     @neo.create_node_index("xids")
     @neo.create_node_index("apps")
     @neo.create_node_index("app_ids")
+    @neo.create_relationship_index("app_id-xid")
+    @neo.create_relationship_index("app-xid")
   end
 
   def check_for_neo4j(neo4j_uri)
@@ -76,33 +80,20 @@ class Neo
         return {}
       end
       parts = str.split " - "
-      if parts.length > 1
-        header = parts[0]
-        logs = parts[1]
-        hash = parse_log_header header
-        hash[:message] = parts[1]
-      else
+      if parts.length != 2
+        measure("parse_logfmt.invalid_log",1)
         return {}
       end
-      result = hash.merge parse_log_message logs
+      header = parts[0]
+      logs = parts[1]
+      hash = parse_log_header header
+      hash[:message] = parts[1]
+      result = hash.merge Logfmt.parse logs
+      measure("parse_logfmt.valid_log",1)
     end
     return result
   end
-
-  def parse_log_message(msg)
-    hash = {}
-    monitor "parse_log_message" do
-      pairs = msg.split " "
-      pairs.map do |val|
-        if val.include? "="
-          pair = val.split "="
-          hash[pair[0]] = pair[1]
-        end
-      end
-    end
-    return hash  
-  end
-  
+ 
   def parse_log_header(header)
     hash = {}
     monitor "parse_log_header" do
@@ -124,31 +115,30 @@ class Neo
 
   def add_log(logHash)
     monitor "add_log" do
-      if logHash.has_key? "xid"  
+      if logHash.has_key? :xid  
         logNode = Neography::Node.create(logHash)
-        create_xid_node(logHash["xid"])
-        link_xid(logHash["xid"],logNode)
-        if logHash.has_key? "app"
-          create_app_node logHash["app"] 
-          link_app_node logHash["xid"], logHash["app"]
-        end
+        create_xid_node(logHash[:xid])
+        link_xid(logHash[:xid],logNode)
+        
         measure("has_xid", 1)
         
-        if logHash.has_key? "app_id"
-          create_app_id_node(logHash["app_id"])
-          link_app_id(logHash["xid"],logHash["app_id"])
+        #this should grab the app_id from the xid node...
+        if logHash.has_key?(:app_name) && logHash.has_key?(:app_id)
+          create_app_id_node(logHash[:app_id],{"app_name" => logHash[:app_name]})
+          add_to_app_index(logHash[:app_id], logHash[:app_name]) 
+          link_app_id(logHash[:xid],logHash[:app_id])
         end
-     
-        if logHash.has_key? "at"
-          create_comp_nodes(logHash["at"])
-          link_comp(logHash["at"],  logNode)
+        
+        if logHash.has_key? :at
+          create_comp_nodes(logHash[:at])
+          link_comp(logHash[:at],  logNode)
           measure("hes_at",1)
         else
           measure("no_at",1)
         end
 
-        if logHash.has_key? "xid"
-          return logHash["xid"]
+        if logHash.has_key? :xid
+          return logHash[:xid]
         end
 
       else
@@ -157,17 +147,12 @@ class Neo
       
     end
   end 
+  
 
-  def create_comp_nodes(at)
+  def create_comp_node(at)
     monitor "create_comp_nodes" do
       atComps = split_at at
-      create_unique("components","name",at,{:name => at})
-      agg = atComps[0]
-      atComps.map do |comp|
-        agg = dot agg, comp
-        params = {:fullname => agg, :name => comp}
-        create_unique("components","name",agg,params)
-      end 
+      create_unique("components","name",at,{:fullname => at,:name =>atComps[-1] })
     end
   end
 
@@ -178,6 +163,20 @@ class Neo
       measure("create_unique.failure",1)
     end
   end
+  
+  def update_app_id_node(app_id,params={})
+    monitor "update_app_id_node" do
+      n= query_app_id_node(app_id)
+      @neo.set_node_properties(n,params)
+    end
+  end
+
+  def add_to_app_index(app_id,name)
+    monitor "add_to_app_index" do
+      n=query_app_id_node(app_id)
+      @neo.add_node_to_index("apps","name",name,n)
+    end
+  end
 
   def create_xid_node(xid,params={}) 
     monitor "create_xid_node" do
@@ -186,13 +185,6 @@ class Neo
     end
   end
   
-  def create_app_node(app, params={})
-    monitor "create_app_node" do
-      params["name"] = app
-      create_unique("app","name",app,params)
-    end
-  end
- 
   def create_app_id_node(app_id, params={})
     monitor "create_app_id_node" do
       params["app_id"] = app_id
@@ -216,13 +208,13 @@ class Neo
       begin
         xid_node = query_xid_node xid
         app_id_node = query_app_id_node app_id 
-        @neo.create_relationship("created", app_id_node, xid_node)
+        @neo.create_unique_relationship("app_id-xid","between","#{app_id}-#{xid}",
+                                        "created",app_id_node, xid_node)
       rescue
         measure("link_app_id.failure",1)
       end
     end
   end
-
 
   def link_xid(xid, logNode)
     monitor "link_xid" do
@@ -235,14 +227,6 @@ class Neo
     end
   end
 
-  def link_app_node(xid,app)
-    monitor "link_app_node" do
-      xidNode = query_xid_node xid
-      appNode = query_app_node app
-      @neo.create_relationship("created", appNode, xidNode) 
-    end
-  end
-   
   def query_app_id_node(app_id)
     monitor("query_app_id_node") do
       begin
@@ -266,20 +250,10 @@ class Neo
     end
   end
 
-  def query_app_node(app)
-    monitor("query_app_node")do
-      begin
-        @neo.get_node_index("app","name",app)
-      rescue
-        measure("query_app_node.not_found",1)
-      end
-    end
-  end
-
-  def query_comp_node(comp)
+  def query_comp_node(at)
     monitor "query_comp_node" do
       begin
-        @neo.get_node_index("components","name",comp)
+        @neo.get_node_index("components","name",at)
       rescue
         measure("query_comp_node.not_found",1)
         nil
