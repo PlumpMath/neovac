@@ -5,3 +5,25 @@ START n=node:xid('val:*')
 MATCH n-[:logged]->l
 with n, collect(l.message + "\n") as logs
 return n, logs
+
+
+Get all of the metrics that component logs
+
+start c=node:components('*:*')
+match c-[:measured]-a-[:is]->m
+with c.name as comp, collect(distinct m.name) as metrics
+return comp,metrics
+
+Get all of the metrics that a app logs
+start a=node:apps('name:immense-dawn-7692')
+match a-[:created]->x-[:logged]->()-[:recorded]->v-[:is]->m
+with a.app_name as app, collect(distinct m.name) as metrics
+return app,metrics
+
+start a=node:apps('name:polar-meadow-2105')
+match a-[:created]->x-[:logged]->()-[:recorded]->values-[:is]->m
+with a,x,m,values
+match m-[:instance_of]->v
+with a, x,m.name as metric, avg(v.val) as normal,values
+with a, x,collect(metric) as metrics, collect(normal) as normals,collect(values.val - normal) as var, collect(values.val) as vals
+return a.app_name,x.xid, metrics, normals, vals

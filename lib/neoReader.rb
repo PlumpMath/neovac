@@ -18,8 +18,8 @@ class NeoReader
       with app,xid,collect(comp.name) as names, logs
       with app,xid,filter(name in names : name =~"failure") as fails,logs
       return xid.xid, logs, app.app_name, app.app_id, xid.timestamp, fails
-      order by xid.timestamp
-      limit 5     
+      order by xid.timestamp DESC
+      limit 20    
     EOF
   end
   
@@ -44,8 +44,8 @@ class NeoReader
       with app,xid,collect(comp.name) as names, logs
       with app,xid,filter(name in names : name =~"failure") as fails,logs
       return xid.xid, logs, app.app_name, app.app_id, xid.timestamp, fails
-      order by xid.timestamp
-      limit 5     
+      order by xid.timestamp DESC
+      limit 20 
     EOF
   end
 end

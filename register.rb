@@ -25,6 +25,6 @@ class TestLogParser < MiniTest::Unit::TestCase
   end
 
   def test_log
-    @neo.process_log "116 <134>1 2012-12-10T03:00:48.123456Z erlang t.feff49f1-4d55-4c9e-aee1-2d2b10e69b42 console.1 - xid=0x2341 app_id=123123 app_name=agreatname measure.thing=val derpherp=asdlkfj"
+    @neo.process_log "116 <134>1 2012-12-10T03:00:48.123456Z erlang t.feff49f1-4d55-4c9e-aee1-2d2b10e69b42 console.1 - xid=0x2341 app_id=123123 app_name=agreatname at=full.of.win.time measure.thing=val derpherp=asdlkfj"
   end
 end

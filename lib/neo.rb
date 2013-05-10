@@ -50,6 +50,7 @@ class Neo
     @neo.create_node_index("xids")
     @neo.create_node_index("apps")
     @neo.create_node_index("app_ids")
+    @neo.create_node_index("metrics")
     @neo.create_relationship_index("app_id-xid")
     @neo.create_relationship_index("app-xid")
   end
@@ -128,10 +129,16 @@ class Neo
           add_to_app_index(logHash[:app_id], logHash[:app_name]) 
           link_app_id(logHash[:xid],logHash[:app_id])
         end
-        
+        #this is expect at to end with .something_that_is_not_needed
         if logHash.has_key? :at
+          logHash[:at] = strip_at logHash[:at]
           create_comp_node(logHash[:at])
           link_comp(logHash[:at],  logNode)
+          
+          filter_metrics(logHash).each do |key,value|
+            create_metric_node({key => value},logHash[:at],logNode)
+          end
+
           measure("hes_at",1)
         else
           measure("no_at",1)
@@ -139,6 +146,8 @@ class Neo
         
         update_xid_timestamp logHash[:xid], logHash[:timestamp]
         
+        
+
         if logHash.has_key? :xid
           return logHash[:xid]
         end
@@ -149,11 +158,21 @@ class Neo
     end
   end 
   
+  def filter_metrics(hash)
+    hash.select do |key, value|
+      key.to_s.match(/^measure/)
+    end
+  end
+  
+  def strip_at(at)
+    atComps = split_at at
+    atComps.pop
+    atComps.join('.')
+  end
 
   def create_comp_node(at)
     monitor "create_comp_node" do
-      atComps = split_at at
-      create_unique("components","name",at,{:fullname => at,:name =>atComps[-1] })
+      create_unique("components","name",at,{:name => at })
     end
   end
 
@@ -197,6 +216,35 @@ class Neo
     monitor "create_app_id_node" do
       params["app_id"] = app_id
       create_unique("app_ids", "app_id",app_id,params)
+    end
+  end
+  
+  def create_metric_node(metric,at,log_node)
+    monitor "create_metric_node" do
+      metric_name, value = metric.first
+      create_metric_type_node(metric_name)
+      metric_node= @neo.create_node("val" => value.to_f)
+      link_metric(at,metric_node,metric_name,log_node)
+    end
+  end
+
+  def create_metric_type_node(metric,params={})
+    monitor "create_metric_type_node" do
+      params["name"] = metric
+      create_unique("metrics","name",metric,params)
+    end
+  end
+
+  def link_metric(at,metricNode,metricName,logNode)
+    monitor "link_metric" do
+      compNode = query_comp_node at
+      metric_type = query_metric_type_node metricName
+      r = @neo.create_relationship("recorded",logNode,metricNode)
+      @neo.set_relationship_properties r, {"name" => metricName}
+      r = @neo.create_relationship("measured",compNode,metricNode)
+      @neo.set_relationship_properties r, {"name" => metricName} 
+      @neo.create_relationship("instance_of",metric_type,metricNode)
+      @neo.create_relationship("is",metricNode,metric_type)
     end
   end
 
@@ -264,6 +312,18 @@ class Neo
         @neo.get_node_index("components","name",at)
       rescue
         measure("query_comp_node.not_found",1)
+        nil
+      end
+    end
+  end
+
+
+  def query_metric_type_node(metricName)
+    monitor "query_comp_node" do
+      begin
+        @neo.get_node_index("metrics","name",metricName)
+      rescue
+        measure("query_metric_type_node.not_found",1)
         nil
       end
     end
