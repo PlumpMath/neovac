@@ -9,11 +9,17 @@ class NeoReader
 
   def getRecent
     @neo.execute_query(<<-EOF)
-      START n=node:xids('val:*')
-      MATCH n-[:logged]->l
-      with n.xid as xid, collect(l.message) as logs
-      limit 5
-      return xid, logs 
+      START xid=node:xids('val:*')
+      MATCH app-[:created]->xid-[:logged]->log
+      with app,xid,log
+      order by log.timestamp ASC
+      with app, xid, collect(log.message) as logs
+      match xid-[:logged]->()<-[:caused]-comp
+      with app,xid,collect(comp.name) as names, logs
+      with app,xid,filter(name in names : name =~"failure") as fails,logs
+      return xid.xid, logs, app.app_name, app.app_id, xid.timestamp, fails
+      order by xid.timestamp
+      limit 5     
     EOF
   end
   
@@ -28,11 +34,18 @@ class NeoReader
   def get_by(index,key,val)
     @neo.execute_query(<<-EOF)
       start app=node:#{index}('#{key}:#{val}')
-      match app-[:created]->x
-      with distinct(x) as xs
-      match xs-[:logged]->l
-      with xs.xid as xid,collect(l.message) as msg
-      return xid, msg  
+      MATCH app-[:created]->xid
+      with app,xid
+      MATCH xid-[:logged]->log
+      with app,xid,log
+      order by log.timestamp ASC
+      with app, xid, collect(log.message) as logs
+      match xid-[:logged]->()<-[:caused]-comp
+      with app,xid,collect(comp.name) as names, logs
+      with app,xid,filter(name in names : name =~"failure") as fails,logs
+      return xid.xid, logs, app.app_name, app.app_id, xid.timestamp, fails
+      order by xid.timestamp
+      limit 5     
     EOF
   end
 end

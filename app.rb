@@ -4,6 +4,7 @@ require "iron_mq"
 
     $iron = IronMQ::Client.new()
     $queue = $iron.queue("log")
+    $pqueue = $iron.queue("proxydump")
     $neoReader = NeoReader.new()
  
 class Web < Sinatra::Base
@@ -13,7 +14,6 @@ class Web < Sinatra::Base
   get '/results' do
     puts "resulting"
     @results = $neoReader.getRecent  
-    
     erb :results
   end
 
@@ -26,8 +26,22 @@ class Web < Sinatra::Base
     @results = $neoReader.get_by_app_name params[:name]
     erb :results
   end
-  
+ 
+  post '/proxydump' do
+    $pqueue.post(request.body.read)
+  end
   post '/' do
-    $queue.post(request.body.read)
+    begin
+      request.body.rewind
+      req = request.body.read
+      reqs = req.split('\n')
+      reqs.each do |str|
+        if str != nil
+          $queue.post(str)
+        end
+      end
+    rescue Exception => e
+      raise e
+    end
   end
 end

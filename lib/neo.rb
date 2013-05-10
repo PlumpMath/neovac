@@ -130,17 +130,18 @@ class Neo
         end
         
         if logHash.has_key? :at
-          create_comp_nodes(logHash[:at])
+          create_comp_node(logHash[:at])
           link_comp(logHash[:at],  logNode)
           measure("hes_at",1)
         else
           measure("no_at",1)
         end
-
+        
+        update_xid_timestamp logHash[:xid], logHash[:timestamp]
+        
         if logHash.has_key? :xid
           return logHash[:xid]
         end
-
       else
         measure("no_xid", 1)
       end
@@ -150,7 +151,7 @@ class Neo
   
 
   def create_comp_node(at)
-    monitor "create_comp_nodes" do
+    monitor "create_comp_node" do
       atComps = split_at at
       create_unique("components","name",at,{:fullname => at,:name =>atComps[-1] })
     end
@@ -163,7 +164,14 @@ class Neo
       measure("create_unique.failure",1)
     end
   end
-  
+ 
+  def update_xid_timestamp(xid,timestamp)
+    monitor "update_xid_timestamp" do
+    n=query_xid_node(xid)
+    @neo.set_node_properties(n,{"timestamp"=> timestamp})
+    end
+  end
+
   def update_app_id_node(app_id,params={})
     monitor "update_app_id_node" do
       n= query_app_id_node(app_id)

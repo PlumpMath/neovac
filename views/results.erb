@@ -15,10 +15,18 @@
       <div class="result">
         <table>
           <tr>
-            <td class="bar pass">
+            
+            <td class="bar <%= if !result[5].nil? && result[5].length >0
+              "fail"
+            else
+              "pass"
+            end
+            %>">
             <td class="gap">
             <td class"info">
-              <p><%= result[0] %></p>
+              <p>Xid: <%= result[0] %></p>
+              <p>App Name:<a href="/app/<%=result[2]%>"> <%= result[2] %></a></p>
+              <p>App Id:<a href="/app_id/<%=result[3]%>"> <%= result[3] %></a></p>
               <div class="output">
                 <div class="output-inner">
                   <pre><code><%= result[1].join().gsub(/\\n/,'\n') %></code></pre>
