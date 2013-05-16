@@ -10,6 +10,7 @@ class Neo
   attr_accessor :neo
   
   def initialize
+  
     uri = URI(ENV['NEO4J_URL'] || 'http://localhost:7474') # This is how Heroku tells us about the app.
     @neo = Neography::Rest.new(uri.to_s) # $neography expects a string
     Neography.configure do |config|
@@ -26,22 +27,27 @@ class Neo
       measure("no_neo4j",1)
       exit 1
     end
+
+  @metric_cache = {}
+  @xid_cache = {}
   end
 
   def work
     iron = IronMQ::Client.new()
     queue = iron.queue("log")
-    #cluser_queue = iron.queue("cluster")
+   #cluser_queue = iron.queue("cluster")
     while true
       queue.poll do |msg|
         measure "queue.got", 1
-        @xid = SecureRandom.urlsafe_base64(8)
-        xid = process_log msg.body
-        if xid 
-          
-        end
+        Thread.current[:request_id] = SecureRandom.urlsafe_base64(8)
+        process_log msg.body
       end
     end
+  end
+
+
+  def current_gen
+    (Time.now.to_i / (60 * 60)) %24
   end
 
   def initialize_db
@@ -51,6 +57,7 @@ class Neo
     @neo.create_node_index("apps")
     @neo.create_node_index("app_ids")
     @neo.create_node_index("metrics")
+    @neo.create_node_index("generations")
     @neo.create_relationship_index("app_id-xid")
     @neo.create_relationship_index("app-xid")
   end
@@ -63,6 +70,7 @@ class Neo
       response = http.request(request)
 
       if response.code != '200'
+        puts response
         abort "No $neo"
         return false 
       end
@@ -99,9 +107,8 @@ class Neo
     hash = {}
     monitor "parse_log_header" do
       headerparts = header.split " "
-      hash[:log_order] = headerparts[0]
-      hash[:timestamp] = Time.parse(headerparts[2]).to_f
-      hash[:dyno] = headerparts[5]
+      hash[:timestamp] = Time.parse(headerparts[1]).to_f
+      hash[:dyno] = headerparts[4]
       hash[:ps_name] = hash[:dyno].split(".")[0] if hash[:dyno]
     end
     return hash
@@ -116,45 +123,48 @@ class Neo
 
   def add_log(logHash)
     monitor "add_log" do
+      if logHash.has_key? :request_id
+        logHash[:xid] = logHash[:request_id]    
+      end
+
       if logHash.has_key? :xid  
-        logNode = Neography::Node.create(logHash)
-        create_xid_node(logHash[:xid])
-        link_xid(logHash[:xid],logNode)
+        log_node = Neography::Node.create(logHash)
+          
+        xid_node = create_xid_node(logHash[:xid])
         
+        link_xid(xid_node,log_node)
+       # gen_node = create_generation_node(current_gen) 
+       # link_generation(gen_node,xid_node)
         measure("has_xid", 1)
         
         #this should grab the app_id from the xid node...
         if logHash.has_key?(:app_name) && logHash.has_key?(:app_id)
-          create_app_id_node(logHash[:app_id],{"app_name" => logHash[:app_name]})
+          app_id_node = create_app_id_node(logHash[:app_id],{"app_name" => logHash[:app_name]})
           add_to_app_index(logHash[:app_id], logHash[:app_name]) 
-          link_app_id(logHash[:xid],logHash[:app_id])
+          link_app_id(xid_node,app_id_node)
         end
+        
         #this is expect at to end with .something_that_is_not_needed
         if logHash.has_key? :at
           logHash[:at] = strip_at logHash[:at]
-          create_comp_node(logHash[:at])
-          link_comp(logHash[:at],  logNode)
+          comp_node = create_comp_node(logHash[:at])
+          link_comp(comp_node,  log_node)
           
-          filter_metrics(logHash).each do |key,value|
-            create_metric_node({key => value},logHash[:at],logNode)
-          end
-
-          measure("hes_at",1)
+          create_metric_nodes_batched filter_metrics(logHash), log_node
+          
+          measure("has_at",1)
         else
           measure("no_at",1)
         end
         
-        update_xid_timestamp logHash[:xid], logHash[:timestamp]
-        
-        
-
+        update_xid_timestamp xid_node, logHash[:timestamp]
         if logHash.has_key? :xid
           return logHash[:xid]
         end
+
       else
         measure("no_xid", 1)
       end
-      
     end
   end 
   
@@ -184,23 +194,22 @@ class Neo
     end
   end
  
-  def update_xid_timestamp(xid,timestamp)
+  def update_xid_timestamp(xid_node,timestamp)
     monitor "update_xid_timestamp" do
-    n=query_xid_node(xid)
-    @neo.set_node_properties(n,{"timestamp"=> timestamp})
+    @neo.set_node_properties(xid_node,{"timestamp"=> timestamp})
     end
   end
 
-  def update_app_id_node(app_id,params={})
+  def update_app_id_node(app_id_node,params={})
     monitor "update_app_id_node" do
-      n= query_app_id_node(app_id)
+      n= query_app_id_node(app_id_node)
       @neo.set_node_properties(n,params)
     end
   end
 
-  def add_to_app_index(app_id,name)
+  def add_to_app_index(app_id_node,name)
     monitor "add_to_app_index" do
-      n=query_app_id_node(app_id)
+      n=query_app_id_node(app_id_node)
       @neo.add_node_to_index("apps","name",name,n)
     end
   end
@@ -219,13 +228,30 @@ class Neo
     end
   end
   
-  def create_metric_node(metric,at,log_node)
+  def create_metric_node(metric,log_node)
     monitor "create_metric_node" do
       metric_name, value = metric.first
-      create_metric_type_node(metric_name)
+      metric_type_node = query_metric_type_node(metric_name) || create_metric_type_node(metric_name)
       metric_node= @neo.create_node("val" => value.to_f)
-      link_metric(at,metric_node,metric_name,log_node)
+      link_metric(metric_node,metric_type_node,log_node)
     end
+  end
+
+  def create_metric_nodes_batched(metrics,log_node)
+    monitor "create_metric_nodes_batched" do
+      ops = []
+      metrics.each do |key,val|
+        ops.concat create_metric_node_batch(key,val,log_node)
+      end
+      return ops
+    end
+  end
+  
+  def create_metric_node_batch(metric_name,value,log_node)
+    metric_type_node = query_metric_type_node(metric_name) || create_metric_type_node(metric_name)
+    return [[:create_node,{"val" => value}],
+      [:create_relationship, "recorded",log_node,"{0}"],
+      [:create_relationship, "instance_of",metric_type_node,"{0}"]]
   end
 
   def create_metric_type_node(metric,params={})
@@ -235,35 +261,33 @@ class Neo
     end
   end
 
-  def link_metric(at,metricNode,metricName,logNode)
-    monitor "link_metric" do
-      compNode = query_comp_node at
-      metric_type = query_metric_type_node metricName
-      r = @neo.create_relationship("recorded",logNode,metricNode)
-      @neo.set_relationship_properties r, {"name" => metricName}
-      r = @neo.create_relationship("measured",compNode,metricNode)
-      @neo.set_relationship_properties r, {"name" => metricName} 
-      @neo.create_relationship("instance_of",metric_type,metricNode)
-      @neo.create_relationship("is",metricNode,metric_type)
+  def create_generation_node(gen,params={})
+    monitor "create_generation_node" do
+      params["generation"] = gen
+      create_unique("generations", "generation", gen,params)
     end
   end
 
-  def link_comp(at,logNode)
+  def link_metric(metric_node,metric_type_node,log_node)
+    monitor "link_metric" do
+      @neo.create_relationship("recorded",log_node,metric_node)
+      @neo.create_relationship("instance_of",metric_type_node,metric_node)
+    end
+  end
+
+  def link_comp(comp_node,log_node)
     monitor "link_component" do
       begin
-        comp = query_comp_node(at)
-        @neo.create_relationship("caused", comp, logNode) 
+        @neo.create_relationship("caused", comp_node, log_node) 
       rescue
         measure("link_component.failure",1)
       end
     end
   end
 
-  def link_app_id(xid, app_id)
+  def link_app_id(xid_node, app_id_node)
     monitor "link_app_id" do
       begin
-        xid_node = query_xid_node xid
-        app_id_node = query_app_id_node app_id 
         @neo.create_unique_relationship("app_id-xid","between","#{app_id}-#{xid}",
                                         "created",app_id_node, xid_node)
       rescue
@@ -272,13 +296,37 @@ class Neo
     end
   end
 
-  def link_xid(xid, logNode)
+  def link_xid(xid_node, log_node)
     monitor "link_xid" do
       begin
-        xidNode = query_xid_node(xid)
-        @neo.create_relationship("logged", xidNode, logNode)
+        @neo.create_relationship("logged", xid_node, log_node)
       rescue
         measure("link_xid.failure",1)
+      end
+    end
+  end
+
+  #gens 24 total
+  #there is a 24 hour sliding window
+  #a new generation is created every hour
+  #it will be deleted in an hour
+  def link_generation(gen_node,xid_node)
+    monitor "link_generation" do
+      begin
+        @neo.create_relationship("owns",gen_node,xid_node)
+      rescue
+        measure("link_generation.failure",1)
+      end
+    end
+  end
+
+  def query_generation_node(gen)
+    monitor "query_generation_node" do
+      begin
+        @neo.get_node_index("generations","generation",gen)
+      rescue
+        measure("query_generation_node.not_found",1)
+        nil
       end
     end
   end
@@ -294,11 +342,18 @@ class Neo
     end
   end
 
- 
   def query_xid_node(xid)
     monitor("query_xid_node") do
+      return @xid_cache[xid] || query_xid_node_miss(xid)
+    end
+  end
+  
+  def query_xid_node_miss(xid)
+    monitor("query_xid_node.miss") do
       begin
-        @neo.get_node_index("xids", "val", xid) 
+        n= @neo.get_node_index("xids", "val", xid) 
+        @xid_cache[xid] = n
+        return n
       rescue
         measure("query_xid_node.not_found",1)
         nil
@@ -317,16 +372,43 @@ class Neo
     end
   end
 
+  def query_metric_type_node(metric_name)
+    monitor "query_metric_type_node" do
+      return @metric_cache[metric_name] || query_metric_type_node_miss(metric_name)
+    end
+  end
 
-  def query_metric_type_node(metricName)
-    monitor "query_comp_node" do
+  def query_metric_type_node_miss(metricName)
+    monitor "query_metric_type_node.miss" do
       begin
-        @neo.get_node_index("metrics","name",metricName)
+        n= @neo.get_node_index("metrics","name",metricName)
+        @metric_cache[metricName] = n
+        return n
       rescue
         measure("query_metric_type_node.not_found",1)
         nil
       end
     end
+  end
+
+  def delete_gen(gen)
+    @neo.execute_query(<<-EOF)
+      start g=node:generations('gen:#{gen}')
+      match g-[:owns]->x
+      with x
+      match x-[r1:logged]->l-[r2:recorded]->v
+      with x,l,v
+      match x-[r]-()
+      delete r
+      with x,l,v
+      match l-[r2]-()
+      delete r2
+      with x,l,v
+      match v-[r3]-()
+      delete r3
+      with x,l,v
+      delete x,l,v
+    EOF
   end
 
   def dot(left,right)
@@ -348,7 +430,7 @@ class Neo
     end
   end
   def log_base_hash
-    hash = {:xid => @xid, :app=> "neovac"}
+    hash = {:request_id=> Thread.current[:request_id], :app=> "neovac"}
     hash
   end
 
