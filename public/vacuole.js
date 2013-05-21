@@ -31,12 +31,18 @@
   $.fn.linkify = function () {
     return this.each(linkifyThis);
   };
-
 })(jQuery);
 
 
 // Linkify links.
 jQuery(document).ready(function() {
-   jQuery('code').linkify();
+  jQuery('code').linkify();
+  $('#poll-button').click(function(){
+    var xid = $('#request_id').text();
+    $('poll-button').text("working");
+    $.post('http://neovac.herokuapp.com/poll/request_id/' + xid, function(data){
+      $('#poll-button').text(data);
+    });
+  });
 });
 

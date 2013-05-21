@@ -24,7 +24,7 @@
             %>">
             <td class="gap">
             <td class"info">
-              <p>Xid: <%= result[0] %></p>
+              <p>Xid: <span id="request_id"><%= result[0] %></span> <span id="poll-button" href='#'>Update</span></p>
               <p>App Name:<a href="/app/<%=result[2]%>"> <%= result[2] %></a></p>
               <p>App Id:<a href="/app_id/<%=result[3]%>"> <%= result[3] %></a></p>
               <p>Last Modified: <%=Time.at(result[4]).to_s%>

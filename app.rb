@@ -5,6 +5,7 @@ require "iron_mq"
     $iron = IronMQ::Client.new()
     $queue = $iron.queue("log")
     $pqueue = $iron.queue("proxydump")
+    $priority = $iron.queue("priority")
     $neoReader = NeoReader.new()
  
 class Web < Sinatra::Base
@@ -26,11 +27,18 @@ class Web < Sinatra::Base
     @results = $neoReader.get_by_app_name params[:name]
     erb :results
   end
- 
+
+  post '/poll/request_id/:id' do
+    $priority.post params[:id]
+    return "Working, start madly refreshing"
+  end
+
   post '/proxydump' do
     $pqueue.post(request.body.read)
   end
-  post '/' do
+
+  #disabled at iron_mq's request, should be back by the end of the week
+  post '/derp' do
     begin
       request.body.rewind
       req = request.body.read

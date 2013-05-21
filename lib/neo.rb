@@ -27,15 +27,15 @@ class Neo
       measure("no_neo4j",1)
       exit 1
     end
-
+ 
+  @iron = IronMQ::Client.new()
   @metric_cache = {}
   @xid_cache = {}
   end
 
   def work
-    iron = IronMQ::Client.new()
-    queue = iron.queue("log")
-   #cluser_queue = iron.queue("cluster")
+    queue = @iron.queue("log")
+    #cluser_queue = iron.queue("cluster")
     while true
       queue.poll do |msg|
         measure "queue.got", 1
@@ -45,6 +45,29 @@ class Neo
     end
   end
 
+  def priority_work
+    priority = @iron.queue("priority")
+    puts "priority_work running"
+    while true
+      priority.poll do |msg|
+        Thread.current[:request_id] = SecureRandom.urlsafe_base64(8)
+        measure "priority.queue.got",1
+          puts msg.body
+          clear_request_queue msg.body
+      end
+    end
+  end
+
+  def clear_request_queue request_id 
+    request_queue = @iron.queue(request_id)
+    puts "in clear request queue"
+    while msg = request_queue.get
+      puts "got item"
+      logfmt = parse_logfmt msg.body
+      add_log logfmt
+      msg.delete
+    end
+  end
 
   def current_gen
     (Time.now.to_i / (60 * 60)) %24
@@ -130,7 +153,7 @@ class Neo
       if logHash.has_key? :xid  
         log_node = Neography::Node.create(logHash)
           
-        xid_node = create_xid_node(logHash[:xid])
+        xid_node = query_xid_node(logHash[:xid]) || create_xid_node(logHash[:xid])
         
         link_xid(xid_node,log_node)
        # gen_node = create_generation_node(current_gen) 
@@ -141,7 +164,7 @@ class Neo
         if logHash.has_key?(:app_name) && logHash.has_key?(:app_id)
           app_id_node = create_app_id_node(logHash[:app_id],{"app_name" => logHash[:app_name]})
           add_to_app_index(logHash[:app_id], logHash[:app_name]) 
-          link_app_id(xid_node,app_id_node)
+          link_app_id(xid_node,app_id_node,logHash[:xid],logHash[:app_id])
         end
         
         #this is expect at to end with .something_that_is_not_needed
@@ -240,18 +263,20 @@ class Neo
   def create_metric_nodes_batched(metrics,log_node)
     monitor "create_metric_nodes_batched" do
       ops = []
+      count =0
       metrics.each do |key,val|
-        ops.concat create_metric_node_batch(key,val,log_node)
+        ops.concat create_metric_node_batch(key,val,log_node,count)
+      count = count + 3
       end
       return ops
     end
   end
   
-  def create_metric_node_batch(metric_name,value,log_node)
+  def create_metric_node_batch(metric_name,value,log_node,count)
     metric_type_node = query_metric_type_node(metric_name) || create_metric_type_node(metric_name)
     return [[:create_node,{"val" => value}],
-      [:create_relationship, "recorded",log_node,"{0}"],
-      [:create_relationship, "instance_of",metric_type_node,"{0}"]]
+      [:create_relationship, "recorded",log_node,"{#{count}}"],
+      [:create_relationship, "instance_of",metric_type_node,"{#{count}}"]]
   end
 
   def create_metric_type_node(metric,params={})
@@ -285,12 +310,14 @@ class Neo
     end
   end
 
-  def link_app_id(xid_node, app_id_node)
+  def link_app_id(xid_node, app_id_node,app_id,xid)
     monitor "link_app_id" do
       begin
         @neo.create_unique_relationship("app_id-xid","between","#{app_id}-#{xid}",
                                         "created",app_id_node, xid_node)
-      rescue
+      rescue Exception => e
+        puts e.message
+        puts e.backtrace.inspect
         measure("link_app_id.failure",1)
       end
     end
@@ -424,14 +451,31 @@ class Neo
 
   def process_log(log)
     monitor("process_log") do
-      logfmt = parse_logfmt log 
-      xid =add_log logfmt
-      return xid 
+      logfmt = parse_logfmt log
+      if logfmt.has_key?(:request_id) 
+        if logfmt.has_key?(:app_name)
+          return add_log logfmt
+        end
+
+        if logfmt[:request_id].split('-')[0].to_i(16) % 100 < 5
+          return add_log logfmt
+        else
+          long_queue_request logfmt[:request_id], log
+        end
+      end
+      return nil
     end
   end
   def log_base_hash
     hash = {:request_id=> Thread.current[:request_id], :app=> "neovac"}
     hash
+  end
+
+  def long_queue_request(request_id, log)
+    monitor("long_queue_request") do
+      req_queue = @iron.queue(request_id)
+      req_queue.post log 
+    end
   end
 
   def log_component(subcomp)
