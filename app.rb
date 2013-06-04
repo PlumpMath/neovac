@@ -1,14 +1,15 @@
 require 'sinatra'
 require './lib/neoReader.rb'
 require "iron_mq"
-
+require './loggable.rb'
     $iron = IronMQ::Client.new()
-    $queue = $iron.queue("log")
     $pqueue = $iron.queue("proxydump")
-    $priority = $iron.queue("priority")
+    $splunk = $iron.queue("splunk")
+    $sample = $iron.queue("sample")
     $neoReader = NeoReader.new()
  
 class Web < Sinatra::Base
+  include Loggable
   set :public_folder, 'public'
   
 
@@ -29,27 +30,81 @@ class Web < Sinatra::Base
   end
 
   post '/poll/request_id/:id' do
-    $priority.post params[:id]
+    $splunk.post params[:id]
     return "Working, start madly refreshing"
   end
 
   post '/proxydump' do
-    $pqueue.post(request.body.read)
-  end
-
-  #disabled at iron_mq's request, should be back by the end of the week
-  post '/derp' do
-    begin
-      request.body.rewind
-      req = request.body.read
-      reqs = req.split('\n')
-      reqs.each do |str|
-        if str != nil
-          $queue.post(str)
-        end
+    Thread.new do
+      monitor "proxydump" do
+        $pqueue.post(request.body.read)
       end
-    rescue Exception => e
-      raise e
     end
   end
+  
+  get '/logs/:id' do
+    Thread.new do
+      $neoReader.get_logs params[:id]
+    end
+  end
+  #disabled at iron_mq's request, should be back by the end of the week
+  post '/' do
+    strio = StringIO.new request.body.read
+    Thread.new do
+      process_log(strio)   
+    end
+ 
+end
+
+  def process_log(strio)
+    monitor "process_log" do
+      while (!strio.eof) do
+        line = split_syslog strio
+        measure "process_log.found_line", 1
+        if line.include? "request_id"
+          measure "process_log.valid_line",1
+          #if the reqests hash in the sample space put it in the sample queue
+          if partition line
+            measure "process_log.sampled_line",1
+            #should check to see if the queue exsisted already or not
+            q = $iron.queue(get_request_id line)
+            q.post(line)
+            $sample.post(get_request_id line)
+          end
+        end
+      end
+    end
+  end
+
+  def split_syslog(strio)
+    len = strio.gets(" ").to_i
+    line = strio.read(len)
+    return line
+  end
+
+  def hash_request_id(str)
+    str.scan(/request_id=([a-f0-9A-F]*)/)[0][0] 
+  end
+
+  def get_request_id(str)
+    str.scan(/request_id=([0-9a-fA-F]*-[0-9a-fA-F]*-[0-9a-fA-F]*-[0-9a-fA-F]*-[0-9a-fA-F]*)/)[0][0]
+  end
+  
+  def partition(str)
+    id = hash_request_id(str)
+    @sample ||= ENV["SAMPLE"].to_i || 20 
+    if id.to_i(16) % 100 < @sample 
+      return true
+    end 
+    return false
+  end
+
+  def log_base_hash
+    hash = {:app=> "neovac"}
+    hash
+  end
+
+  def log_component(subcomp)
+    "neo.web.#{subcomp}"
+  end 
 end

@@ -39,9 +39,16 @@ jQuery(document).ready(function() {
   jQuery('code').linkify();
   $('#poll-button').click(function(){
     var xid = $('#request_id').text();
-    $('poll-button').text("working");
+    $('#poll-button').text("working");
     $.post('http://neovac.herokuapp.com/poll/request_id/' + xid, function(data){
       $('#poll-button').text(data);
+    });
+  });
+  $('#syslogs').click(function(){
+    var xid = $('#request_id').text();
+    $('#syslogs').text("polling");
+    $.get("http://neovac.herokuapp.com/logs/" + xid, function(data){
+     $('#code').text(data); 
     });
   });
 });

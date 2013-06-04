@@ -4,6 +4,7 @@ require 'neography'
 require 'net/http'
 require 'iron_mq'
 require 'securerandom'
+require 'json'
 
 class Neo
   include Loggable
@@ -33,39 +34,79 @@ class Neo
   @xid_cache = {}
   end
 
-  def work
-    queue = @iron.queue("log")
+  def work(queue_name)
+    queue = @iron.queue(queue_name)
     #cluser_queue = iron.queue("cluster")
+    Thread.current[:source] = "worker.#{queue_name}"
     while true
       queue.poll do |msg|
-        measure "queue.got", 1
+        measure "#{queue_name}.queue.got", 1
         Thread.current[:request_id] = SecureRandom.urlsafe_base64(8)
-        process_log msg.body
+        clear_request_queue msg.body
+      end
+    end
+  end
+ 
+  def proxy_work
+    queue = @iron.queue("proxydump")
+    Thread.current[:source] = "worker.proxy"
+    while true
+      queue.poll do |msg|
+        Thread.current[:request_id] = SecureRandom.urlsafe_base64(8)
+        measure "proxydump.queue.got",1
+        if !msg.body.empty?
+          processProxy msg.body
+        end
       end
     end
   end
 
-  def priority_work
-    priority = @iron.queue("priority")
-    puts "priority_work running"
+  def processProxy(str)
+    x = JSON.parse(str)
+    add_json(x)  
+  end
+  
+  def splunk()
+    splunkQ = @iron.queue("splunk")
+    Thread.current[:source] = "worker.splunk"
     while true
-      priority.poll do |msg|
-        Thread.current[:request_id] = SecureRandom.urlsafe_base64(8)
-        measure "priority.queue.got",1
-          puts msg.body
-          clear_request_queue msg.body
+      splunkQ.poll do |msg|
+        Thread.current[:request_id] = msg.body
+        start_splunk msg.body
+      end
+    end
+  end
+
+  def start_splunk(req)
+    monitor "start_splunk" do
+      begin
+        @service ||= Splunk::connect({:host => ENV["SPLUNK_URL"],
+                                    :username => ENV["SPLUNK_USERNAME"],
+                                    :password => ENV["SPLUNK_PASSWORD"]})
+      start, finish = get_xid_times req
+      reqQ = @iron.queue(req)
+      s = search.create_oneshot("request_id=#{req}",:starttimeu => start, :endtimeu =>finish)
+      results = Splunk::ResultsReader.new(s)
+      results.each do |result|
+        reqQ.post result["_raw"]
+      end
+      @iron.queue("priority").post req
+      rescue
+        measure "start_splunk.fail", 1
       end
     end
   end
 
   def clear_request_queue request_id 
-    request_queue = @iron.queue(request_id)
-    puts "in clear request queue"
-    while msg = request_queue.get
-      puts "got item"
-      logfmt = parse_logfmt msg.body
-      add_log logfmt
-      msg.delete
+    monitor("clear_request_queue") do
+      request_queue = @iron.queue(request_id)
+      puts "in clear request queue"
+      while msg = request_queue.get
+        puts "got item"
+        logfmt = parse_logfmt msg.body
+        add_log logfmt
+        msg.delete
+      end
     end
   end
 
@@ -116,6 +157,7 @@ class Neo
         measure("parse_logfmt.invalid_log",1)
         return {}
       end
+      
       header = parts[0]
       logs = parts[1]
       hash = parse_log_header header
@@ -142,11 +184,24 @@ class Neo
     atVal.split '.'
   end
   
- 
+  def add_json(json)
+    monitor "add_json" do
+      xid_node = create_xid_node(json["request_id"],json)
+      if json.has_key? "finsihed_at"
+        update_xid_timestamp xid_node, json["finished_at"]
+      end
+    
+      if json.has_key?("app_name") && json.has_key?("app_id")
+         app_id_node = create_app_id_node(json["app_id"],{"app_name" => json["app_name"]})
+        add_to_app_index(json["app_id"], json["app_name"]) 
+        link_app_id(xid_node,app_id_node,json["request_id"],json["app_id"])
+      end
+    end
+  end
 
   def add_log(logHash)
     monitor "add_log" do
-      if logHash.has_key? :request_id
+      if logHash.has_key? :request_id 
         logHash[:xid] = logHash[:request_id]    
       end
 
@@ -181,6 +236,7 @@ class Neo
         end
         
         update_xid_timestamp xid_node, logHash[:timestamp]
+    
         if logHash.has_key? :xid
           return logHash[:xid]
         end
@@ -268,7 +324,7 @@ class Neo
         ops.concat create_metric_node_batch(key,val,log_node,count)
       count = count + 3
       end
-      return ops
+      @neo.batch *ops 
     end
   end
   
@@ -418,6 +474,12 @@ class Neo
     end
   end
 
+
+  def get_xid_times(xid)
+    x= query_xid_node(xid)
+    @neo.get_node_properties(x,["started_at,finished_at"])
+  end
+
   def delete_gen(gen)
     @neo.execute_query(<<-EOF)
       start g=node:generations('gen:#{gen}')
@@ -449,33 +511,9 @@ class Neo
     end
   end
 
-  def process_log(log)
-    monitor("process_log") do
-      logfmt = parse_logfmt log
-      if logfmt.has_key?(:request_id) 
-        if logfmt.has_key?(:app_name)
-          return add_log logfmt
-        end
-
-        if logfmt[:request_id].split('-')[0].to_i(16) % 100 < 5
-          return add_log logfmt
-        else
-          long_queue_request logfmt[:request_id], log
-        end
-      end
-      return nil
-    end
-  end
   def log_base_hash
-    hash = {:request_id=> Thread.current[:request_id], :app=> "neovac"}
+    hash = {:source=> Thread.current[:source], :request_id=> Thread.current[:request_id], :app=> "neovac"}
     hash
-  end
-
-  def long_queue_request(request_id, log)
-    monitor("long_queue_request") do
-      req_queue = @iron.queue(request_id)
-      req_queue.post log 
-    end
   end
 
   def log_component(subcomp)

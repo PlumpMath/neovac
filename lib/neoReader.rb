@@ -9,17 +9,20 @@ class NeoReader
 
   def getRecent
     @neo.execute_query(<<-EOF)
-      START xid=node:xids('val:*')
-      MATCH app-[:created]->xid-[:logged]->log
-      with app,xid,log
-      order by log.timestamp ASC
-      with app, xid, collect(log.message) as logs
-      match xid-[:logged]->()<-[:caused]-comp
-      with app,xid,collect(comp.name) as names, logs
-      with app,xid,filter(name in names : name =~"failure") as fails,logs
-      return xid.xid, logs, app.app_name, app.app_id, xid.timestamp, fails
-      order by xid.timestamp DESC
-      limit 20    
+      START  xid=node:xids('val:*')
+      MATCH app-[:created]->xid
+      with xid, app,
+         app.app_name as name,
+         app.app_id as id,
+         coalesce(xid.finsihed_at?,xid.started_at?,0) as finished,
+         coalesce(xid.exit_status?,9999) as exit,
+         coalesce(xid.request_id?,xid.xid) as request_id,
+         coalesce(xid.action?, "none") as action,
+         coalesce(xid.output?,"") as out
+      where finished > 0
+      return request_id, name,id ,finished,exit, out
+      order by xid.started_at? DESC
+      limit 20
     EOF
   end
   
@@ -33,19 +36,31 @@ class NeoReader
 
   def get_by(index,key,val)
     @neo.execute_query(<<-EOF)
-      start app=node:#{index}('#{key}:#{val}')
+      START  app=node:#{index}('#{key}:#{value}')
       MATCH app-[:created]->xid
-      with app,xid
+      with xid, app,
+         app.app_name as name,
+         app.app_id as id,
+         xid.finsihed_at? as finished,
+         coalesce(xid.exit_status?,9999) as exit,
+         coalesce(xid.request_id?,xid.xid) as request_id,
+         coalesce(xid.action?, "none") as action,
+         coalesce(xid.output?,"") as out
+      return request_id, name,id ,finished,exit, out
+      order by xid.started_at? DESC
+      limit 20
+ EOF
+  end
+
+  def get_logs(id)
+    x = @neo.execute_query(<<-EOF)
+      START  xid=node:xids('val:#{val}')
       MATCH xid-[:logged]->log
-      with app,xid,log
+      with xid,log
       order by log.timestamp ASC
-      with app, xid, collect(log.message) as logs
-      match xid-[:logged]->()<-[:caused]-comp
-      with app,xid,collect(comp.name) as names, logs
-      with app,xid,filter(name in names : name =~"failure") as fails,logs
-      return xid.xid, logs, app.app_name, app.app_id, xid.timestamp, fails
-      order by xid.timestamp DESC
-      limit 20 
+      with xid, collect(log.message) as logs
+      return logs
     EOF
+    x["data"][0][0].join
   end
 end
