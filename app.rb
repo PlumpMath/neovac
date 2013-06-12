@@ -1,32 +1,52 @@
+require 'json'
 require 'sinatra'
 require './lib/neoReader.rb'
 require "iron_mq"
 require './loggable.rb'
+require 'sinatra'
+require 'sinatra/cross_origin'
+
     $iron = IronMQ::Client.new()
     $pqueue = $iron.queue("proxydump")
     $splunk = $iron.queue("splunk")
     $sample = $iron.queue("sample")
     $neoReader = NeoReader.new()
- 
+
 class Web < Sinatra::Base
   include Loggable
-  set :public_folder, 'public'
-  
+  register Sinatra::CrossOrigin
+  configure do
+    enable :cross_origin
+
+    set :allow_origin, :any
+    set :allow_methods, [:get, :post,:options]
+    set :allow_credentials, true
+    set :public_folder, 'public'
+  end
+
 
   get '/results' do
     puts "resulting"
-    @results = $neoReader.getRecent  
+    @results = $neoReader.getRecent
     erb :results
   end
 
-  get '/app_id/:id' do
-    @results = $neoReader.get_by_app_id params[:id]
-    erb :results
+  get '/app_id/:id.json' do
+    content_type "application/json"
+    results= $neoReader.get_xids_by_app_id params[:id]
+    results.to_json
   end
 
-  get '/app/:name' do
-    @results = $neoReader.get_by_app_name params[:name]
-    erb :results
+  get '/xid/:id.json' do
+    content_type "application/json"
+    results= $neoReader.get_xid params[:id]
+    results.to_json
+  end
+
+  get '/app/:name.json' do
+    content_type "application/json"
+    @results = $neoReader.get_xids_by_app_name params[:name]
+    @results.to_json
   end
 
   post '/poll/request_id/:id' do
@@ -34,6 +54,11 @@ class Web < Sinatra::Base
     return "Working, start madly refreshing"
   end
 
+  options '/*' do
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'X-Requested-With, X-Prototype-Version, X-CSRF-Token'
+  end
   post '/proxydump' do
     Thread.new do
       monitor "proxydump" do
@@ -41,20 +66,19 @@ class Web < Sinatra::Base
       end
     end
   end
-  
+
   get '/logs/:id' do
     Thread.new do
       $neoReader.get_logs params[:id]
     end
   end
-  #disabled at iron_mq's request, should be back by the end of the week
-  post '/' do
-    strio = StringIO.new request.body.read
-    Thread.new do
-      process_log(strio)   
-    end
- 
-end
+
+  # post '/' do
+ #  strio = StringIO.new request.body.read
+ ##   Thread.new do
+ #     process_log(strio)
+ #   end
+ # end
 
   def process_log(strio)
     monitor "process_log" do
@@ -64,12 +88,18 @@ end
         if line.include? "request_id"
           measure "process_log.valid_line",1
           #if the reqests hash in the sample space put it in the sample queue
+
           if partition line
             measure "process_log.sampled_line",1
-            #should check to see if the queue exsisted already or not
+
             q = $iron.queue(get_request_id line)
+            exsits = q.total_messages
+              #should check to see if the queue exsisted already or not
             q.post(line)
-            $sample.post(get_request_id line)
+
+            if exsits == 0
+              $sample.post(get_request_id line)
+            end
           end
         end
       end
@@ -83,19 +113,19 @@ end
   end
 
   def hash_request_id(str)
-    str.scan(/request_id=([a-f0-9A-F]*)/)[0][0] 
+    str.scan(/request_id=([a-f0-9A-F]*)/)[0][0]
   end
 
   def get_request_id(str)
     str.scan(/request_id=([0-9a-fA-F]*-[0-9a-fA-F]*-[0-9a-fA-F]*-[0-9a-fA-F]*-[0-9a-fA-F]*)/)[0][0]
   end
-  
+
   def partition(str)
     id = hash_request_id(str)
-    @sample ||= ENV["SAMPLE"].to_i || 20 
-    if id.to_i(16) % 100 < @sample 
+    @sample ||= ENV["SAMPLE"].to_i || 20
+    if id.to_i(16) % 100 < @sample
       return true
-    end 
+    end
     return false
   end
 
@@ -106,5 +136,5 @@ end
 
   def log_component(subcomp)
     "neo.web.#{subcomp}"
-  end 
+  end
 end
