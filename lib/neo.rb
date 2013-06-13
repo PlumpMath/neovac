@@ -192,11 +192,11 @@ class Neo
 
   def add_json(json)
     monitor "add_json" do
-      xid_node = create_xid_node(json["request_id"],json)
+      xid_node = query_xid_node(json["request_id"]) || create_xid_node(json["request_id"],json)
       @neo.set_node_properties xid_node json
       
       if json.has_key? "finished_at"
-        update_xid_timestamp xid_node, json["finished_at"]
+        update_xid_node xid_node, json["finished_at"]
       end
 
       if json.has_key?("app_name") && json.has_key?("app_id")
@@ -206,6 +206,7 @@ class Neo
       end
     end
   end
+
 
   def add_log(logHash)
     monitor "add_log" do
@@ -281,15 +282,14 @@ class Neo
     end
   end
 
-  def update_xid_timestamp(xid_node,timestamp)
-    monitor "update_xid_timestamp" do
-    @neo.set_node_properties(xid_node,{"timestamp"=> timestamp})
+  def update_xid_node(xid_node,timestamp)
+    monitor "update_xid_node" do
+      @neo.set_node_properties(xid_node,{"timestamp"=> timestamp})
     end
   end
 
   def update_app_id_node(app_id_node,params={})
     monitor "update_app_id_node" do
-      n= query_app_id_node(app_id_node)
       @neo.set_node_properties(n,params)
     end
   end
