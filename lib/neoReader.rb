@@ -23,7 +23,7 @@ class NeoReader
         "email" => result[9],
         "instance" => result[10],
         "exception" => result[11]
-      }
+      }.reject {|key,val| val == nil }
       xidObjs << x
     end
     return xidObjs
@@ -58,7 +58,7 @@ class NeoReader
          xid.action?  as action,
          xid.user_email? as email,
          xid.instance_id? as instance,
-         xid.exception_message as message 
+         xid.exception_message? as message 
       return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance,message
       order by xid.started_at? DESC
       limit 20
