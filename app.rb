@@ -59,10 +59,11 @@ class Web < Sinatra::Base
     response.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'X-Requested-With, X-Prototype-Version, X-CSRF-Token'
   end
+
   post '/proxydump' do
     Thread.new do
       monitor "proxydump" do
-        $pqueue.post(request.body.read)
+ #       $pqueue.post(request.body.read)
       end
     end
   end
