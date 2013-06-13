@@ -106,10 +106,14 @@ class Neo
     monitor("clear_request_queue") do
       request_queue = @iron.queue(request_id)
       puts "in clear request queue"
+      metrics = []
       while msg = request_queue.get
         puts "got item"
         logfmt = parse_logfmt msg.body
-        add_log logfmt
+        metric_temp = filter_metrics logfmt
+        metric_temp[:timestamp] = logfmt[:timestamp]
+        metric_temp[:request_id] = request_id
+        metrics << metric_temp
         msg.delete
       end
       request_queue.delete_queue
@@ -193,7 +197,7 @@ class Neo
   def add_json(json)
     monitor "add_json" do
       xid_node = query_xid_node(json["request_id"]) || create_xid_node(json["request_id"],json)
-      @neo.set_node_properties xid_node json
+      @neo.set_node_properties(xid_node, json)
       
       if json.has_key? "finished_at"
         update_xid_node xid_node, json["finished_at"]
