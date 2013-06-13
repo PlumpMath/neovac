@@ -196,7 +196,7 @@ class Neo
 
   def add_json(json)
     monitor "add_json" do
-      xid_node = query_xid_node(json["request_id"]) || create_xid_node(json["request_id"],json)
+      xid_node = create_xid_node(json["request_id"],{})
       @neo.set_node_properties(xid_node, json)
       
       if json.has_key? "finished_at"
