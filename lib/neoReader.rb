@@ -21,7 +21,8 @@ class NeoReader
         "stack" => result[7],
         "action" => result[8],
         "email" => result[9],
-        "instance" => result[10]
+        "instance" => result[10],
+        "exception" => result[11]
       }
       xidObjs << x
     end
@@ -57,7 +58,8 @@ class NeoReader
          xid.action?  as action,
          xid.user_email? as email,
          xid.instance_id? as instance
-      return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance
+         xid.exception_message as message 
+      return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance,message
       order by xid.started_at? DESC
       limit 20
  EOF
@@ -80,7 +82,8 @@ class NeoReader
          xid.action?  as action,
          xid.user_email? as email,
          xid.instance_id? as instance
-      return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance
+         xid.exception_message as message
+      return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance, message
 EOF
   end
 
