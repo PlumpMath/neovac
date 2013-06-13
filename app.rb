@@ -37,7 +37,7 @@ class Web < Sinatra::Base
     results.to_json
   end
 
-  get '/xid/:id.json' do
+  get '/request_id/:id.json' do
     content_type "application/json"
     results= $neoReader.get_xid params[:id]
     results.to_json
