@@ -82,7 +82,7 @@ class NeoReader
          xid.action?  as action,
          xid.user_email? as email,
          xid.instance_id? as instance,
-         xid.exception_message as message
+         xid.exception_message? as message
       return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance, message
 EOF
   end
