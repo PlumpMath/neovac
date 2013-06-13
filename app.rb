@@ -63,7 +63,7 @@ class Web < Sinatra::Base
   post '/proxydump' do
     Thread.new do
       monitor "proxydump" do
- #       $pqueue.post(request.body.read)
+        $pqueue.post(request.body.read)
       end
     end
   end
