@@ -198,11 +198,7 @@ class Neo
     monitor "add_json" do
       xid_node = create_xid_node(json["request_id"],{})
       @neo.set_node_properties(xid_node, json)
-      
-      if json.has_key? "finished_at"
-        update_xid_node xid_node, json["finished_at"]
-      end
-
+     
       if json.has_key?("app_name") && json.has_key?("app_id")
         app_id_node = create_app_id_node(json["app_id"],{"app_name" => json["app_name"]})
         add_to_app_index(json["app_id"], json["app_name"])
