@@ -14,7 +14,7 @@ class NeoReader
         "request_id" => result[0],
         "app_name" => result[1],
         "id" => result[2],
-        "finished" => Time.at(result[3]),
+        "finished" => result[3],
         "exit" => result[4],
         "output" => result[5],
         "app_id" => result[6],
