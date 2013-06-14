@@ -25,7 +25,7 @@ class NeoReader
         "exception" => result[11],
         "started"   => result[12]
       }
-      if x.has_key? "exception" && x["exit"] == 0
+      if x["exception"] && x["exit"] == 0
         x["exit"] = nil
       end
       
