@@ -23,7 +23,12 @@ class NeoReader
         "email" => result[9],
         "instance" => result[10],
         "exception" => result[11]
-      }.reject {|key,val| val == nil }
+      }
+      if x.has_key? "exception" && x.["exit"] == 0
+        x.["exit"] = nil
+      end
+      
+      x.reject {|key,val| val == nil} 
       xidObjs << x
     end
     return xidObjs
