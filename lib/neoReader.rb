@@ -22,7 +22,8 @@ class NeoReader
         "action" => result[8],
         "email" => result[9],
         "instance" => result[10],
-        "exception" => result[11]
+        "exception" => result[11],
+        "started"   => result[12]
       }
       if x.has_key? "exception" && x["exit"] == 0
         x["exit"] = nil
@@ -53,7 +54,7 @@ class NeoReader
       with xid, app,
          app.app_name as name,
          app.app_id as id,
-         xid.finsihed_at? as finished,
+         xid.finished_at? as finished,
          xid.exit_status? as exit,
          xid.request_id? as request_id,
          xid.action? as action,
@@ -64,7 +65,8 @@ class NeoReader
          xid.user_email? as email,
          xid.instance_id? as instance,
          xid.exception_message? as message 
-      return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance,message
+         xid.started_at? as started 
+     return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance,message,started
       order by xid.started_at? DESC
       limit 20
  EOF
@@ -77,7 +79,7 @@ class NeoReader
       with xid, app,
          app.app_name as name,
          app.app_id as id,
-         xid.finsihed_at? as finished,
+         xid.finished_at? as finished,
          xid.exit_status? as exit,
          xid.request_id? as request_id,
          xid.action? as action,
@@ -88,7 +90,8 @@ class NeoReader
          xid.user_email? as email,
          xid.instance_id? as instance,
          xid.exception_message? as message
-      return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance, message
+         xid.started_at? as started 
+      return request_id, name,id ,finished,exit, out, app_id, stack, action, email, instance, message, started
 EOF
   end
 
