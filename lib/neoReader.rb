@@ -37,6 +37,7 @@ class NeoReader
       if x["exit"] != 0 
         x["status"] = "fail" 
       end
+      x["elasped"] = x["finished"] - x["started"]
       xidObjs << x
     end
     return xidObjs
