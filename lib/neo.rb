@@ -33,6 +33,7 @@ class Neo
     @metric_cache = {}
     @xid_cache = {}
     @gen_cache = {}
+    @comp_cache = {}
   end
 
   def work(queue_name)
@@ -43,7 +44,8 @@ class Neo
       queue.poll do |msg|
         measure "#{queue_name}.queue.got", 1
         Thread.current[:request_id] = SecureRandom.urlsafe_base64(8)
-        clear_request_queue msg.body
+        metrics = clear_request_queue msg.body
+        add_metrics metrics
       end
     end
   end
@@ -110,14 +112,21 @@ class Neo
       while msg = request_queue.get
         puts "got item"
         logfmt = parse_logfmt msg.body
-        metric_temp = filter_metrics logfmt
-        metric_temp[:timestamp] = logfmt[:timestamp]
-        metric_temp[:request_id] = request_id
-        metrics << metric_temp
-        msg.delete
+        raw_metric_temp = filter_metrics logfmt
+        raw_metric_temp.each do |key, val|
+          metric_temp[:name] = key
+          metric_temp[:value] = value
+          metric_temp[:timestamp] = logfmt[:timestamp]
+          metric_temp[:request_id] = request_id
+          metric_temp[:at] = logfmt["at"]
+          metrics << metric_temp
+        end    
+          msg.delete
       end
+
       request_queue.delete_queue
     end
+    return metrics
   end
 
   def current_gen
@@ -207,6 +216,25 @@ class Neo
     end
   end
 
+#  [{metric_name => value, at=> comp, timestamp => time}, {...}, ...] 
+  def add_metrics(metrics, request_id)
+    monitor "add_metrics" do
+        xid_node = query_xid_node(request_id) || create_xid_node(request_id)
+        gen_node = create_generation_node(current_gen)
+        link_generation(gen_node,xid_node)
+        count = 0
+        metrics.each do | metric_hash |
+          ops.concat create_metric_node_batch(metric_hash[:name],
+                                              metric_hash[:value], 
+                                              metric_hash[:timestamp], 
+                                              metric_hash[:at], 
+                                              xid_node, 
+                                              count)
+          count = count + 4
+        end
+    end
+
+  end
 
   def add_log(logHash)
     monitor "add_log" do
@@ -224,17 +252,9 @@ class Neo
         link_generation(gen_node,xid_node)
         measure("has_xid", 1)
 
-        #this should grab the app_id from the xid node...
-        if logHash.has_key?(:app_name) && logHash.has_key?(:app_id)
-          app_id_node = create_app_id_node(logHash[:app_id],{"app_name" => logHash[:app_name]})
-          add_to_app_index(logHash[:app_id], logHash[:app_name])
-          link_app_id(xid_node,app_id_node,logHash[:xid],logHash[:app_id])
-        end
-
-        #this is expect at to end with .something_that_is_not_needed
         if logHash.has_key? :at
           logHash[:at] = strip_at logHash[:at]
-          comp_node = create_comp_node(logHash[:at])
+          comp_node = query_comp_node logHash[:at]  || create_comp_node(logHash[:at])
           link_comp(comp_node,  log_node)
 
           create_metric_nodes_batched filter_metrics(logHash), log_node
@@ -326,23 +346,25 @@ class Neo
     end
   end
 
-  def create_metric_nodes_batched(metrics,log_node)
+  def create_metric_nodes_batched(metrics,xid_node)
     monitor "create_metric_nodes_batched" do
       ops = []
-      count =0
+      count = 0
       metrics.each do |key,val|
-        ops.concat create_metric_node_batch(key,val,log_node,count)
-      count = count + 3
+        ops.concat create_metric_node_batch(key,val,xid_node,count)
+      count = count + 4
       end
       @neo.batch *ops
     end
   end
-
-  def create_metric_node_batch(metric_name,value,log_node,count)
+  
+  def create_metric_node_batch(metric_name,value,timestamp,at,xid_node,count)
     metric_type_node = query_metric_type_node(metric_name) || create_metric_type_node(metric_name)
+    comp_node = query_comp_node(at) || create_comp_node(at) 
     return [[:create_node,{"val" => value}],
-      [:create_relationship, "recorded",log_node,"{#{count}}"],
-      [:create_relationship, "instance_of",metric_type_node,"{#{count}}"]]
+      [:create_relationship, "recorded",xid_node,"{#{count}}"],
+      [:create_relationship, "instance_of",metric_type_node,"{#{count}}"],
+      [:create_relationship, "caused",comp_node,"{#{count}}"]
   end
 
   def create_metric_type_node(metric,params={})
@@ -465,9 +487,22 @@ class Neo
   def query_comp_node(at)
     monitor "query_comp_node" do
       begin
-        @neo.get_node_index("components","name",at)
+        return @comp_cache[at] || query_comp_node_miss(at)
       rescue
         measure("query_comp_node.not_found",1)
+        nil
+      end
+    end
+  end
+  
+  def query_comp_node_miss(at)
+    monitor "query_comp_node.miss" do
+      begin
+        n = @neo.get_node_index("components", "name", at)
+        @comp_cache[at] = n
+        return n
+      rescue
+        measure "query_comp_node.not_found", 1
         nil
       end
     end
