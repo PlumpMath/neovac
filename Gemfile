@@ -1,5 +1,5 @@
 source "https://rubygems.org"
-asdlfs
+
 ruby "1.9.3"
 gem "sinatra-cross_origin"
 gem "typhoeus"
