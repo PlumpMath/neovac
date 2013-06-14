@@ -24,8 +24,8 @@ class NeoReader
         "instance" => result[10],
         "exception" => result[11]
       }
-      if x.has_key? "exception" && x.["exit"] == 0
-        x.["exit"] = nil
+      if x.has_key? "exception" && x["exit"] == 0
+        x["exit"] = nil
       end
       
       x.reject {|key,val| val == nil} 
