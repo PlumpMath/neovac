@@ -364,7 +364,7 @@ class Neo
     return [[:create_node,{"val" => value}],
       [:create_relationship, "recorded",xid_node,"{#{count}}"],
       [:create_relationship, "instance_of",metric_type_node,"{#{count}}"],
-      [:create_relationship, "caused",comp_node,"{#{count}}"]
+      [:create_relationship, "caused",comp_node,"{#{count}}"]]
   end
 
   def create_metric_type_node(metric,params={})
