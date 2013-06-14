@@ -25,11 +25,18 @@ class NeoReader
         "exception" => result[11],
         "started"   => result[12]
       }
-      if x["exception"] && x["exit"] == 0
-        x["exit"] = nil
-      end
       
-      x.reject {|key,val| val == nil} 
+      x.reject {|key,val| val == nil}
+
+      if x["exit"] == 0 && x["exception"] == nil
+        x["status"] = "success"
+      end
+      if x["exit"] == 0 && x["exception"] != nil
+        x["status"] = "user-fail"
+      end
+      if x["exit"] != 0 
+        x["status"] = "fail" 
+      end
       xidObjs << x
     end
     return xidObjs
