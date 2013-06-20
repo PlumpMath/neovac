@@ -21,6 +21,7 @@ class Web < Sinatra::Base
     set :allow_origin, :any
     set :allow_methods, [:get, :post,:options]
     set :allow_credentials, true
+    set :expose_headers, ['Authorization']
     set :public_folder, 'public'
   end
 
@@ -80,6 +81,9 @@ class Web < Sinatra::Base
  #     process_log(strio)
  #   end
  # end
+  def auth(key)
+    
+  end
 
   def process_log(strio)
     monitor "process_log" do
