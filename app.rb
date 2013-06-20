@@ -33,11 +33,11 @@ class Web < Sinatra::Base
 
   def authorized?
     @auth ||= Rack::Auth::Basic::Request.new(request.env)
-    @auth.provided? and @auth.basic? and @auth.credentials and is_herokai?
+    @auth.provided? and @auth.basic? and @auth.credentials and is_herokai? @auth.credentials[1]
   end
 
-  def is_herokai?
-   heroku = Heroku::API.new(:api_key => password)
+  def is_herokai?(api)
+   heroku = Heroku::API.new(:api_key => api)
     begin
       user= heroku.get_user
       user.body['email'].end_with? "@heroku.com"
