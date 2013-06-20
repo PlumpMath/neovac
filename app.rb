@@ -24,36 +24,45 @@ class Web < Sinatra::Base
     set :allow_headers, ['Authorization']
     set :public_folder, 'public'
   end
+  def protected!
+    return if authorized?
+    headers['WWW-Authenticate'] = 'Basic realm="Restricted Area"'
+    halt 401, "Not authorized\n"
+  end
 
-  use Rack::Auth::Basic, "Need the key!!!" do |username,password|
-    heroku = Heroku::API.new(:api_key => password)
+  def authorized?
+    @auth ||= Rack::Auth::Basci::Request.new(request.env)
+    @auth.provided? and @auth.basic? and @auth.credentials and is_herokai?
+  end
+
+  def is_herokai?
+   heroku = Heroku::API.new(:api_key => password)
     begin
-      heroku.get_user
+      user= heroku.get_user
+      user.body['email'].end_with? "@heroku.com"
+      return true
     rescue 
       return false
     end
-    return true
   end
 
-  get '/results' do
-    puts "resulting"
-    @results = $neoReader.getRecent
-    erb :results
-  end
 
   get '/app_id/:id.json' do
+    protected!
     content_type "application/json"
     results= $neoReader.get_xids_by_app_id params[:id]
     results.to_json
   end
 
   get '/request_id/:id.json' do
+    protected!
     content_type "application/json"
     results= $neoReader.get_xid params[:id]
     results.to_json
   end
 
   get '/app/:name.json' do
+    protected!
     content_type "application/json"
     @results = $neoReader.get_xids_by_app_name params[:name]
     @results.to_json
@@ -79,6 +88,7 @@ class Web < Sinatra::Base
   end
 
   get '/logs/:id' do
+    protected!
     Thread.new do
       $neoReader.get_logs params[:id]
     end
@@ -90,9 +100,6 @@ class Web < Sinatra::Base
  #     process_log(strio)
  #   end
  # end
-  def auth(key)
-    
-  end
 
   def process_log(strio)
     monitor "process_log" do
