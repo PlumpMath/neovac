@@ -5,6 +5,7 @@ require "iron_mq"
 require './loggable.rb'
 require 'sinatra'
 require 'sinatra/cross_origin'
+require 'heroku-api'
 
     $iron = IronMQ::Client.new()
     $pqueue = $iron.queue("proxydump")
