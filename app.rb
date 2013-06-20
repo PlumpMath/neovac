@@ -21,10 +21,19 @@ class Web < Sinatra::Base
     set :allow_origin, :any
     set :allow_methods, [:get, :post,:options]
     set :allow_credentials, true
-    set :expose_headers, ['Authorization']
+    set :allow_headers, ['Authorization']
     set :public_folder, 'public'
   end
 
+  use Rack::Auth::Basic, "Need the key!!!" do |username,password|
+    heroku = Heroku::API.new(:api_key => password)
+    begin
+      heroku.get_user
+    rescue 
+      return false
+    end
+    return true
+  end
 
   get '/results' do
     puts "resulting"
