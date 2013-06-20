@@ -76,7 +76,7 @@ class Web < Sinatra::Base
   options '/*' do
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'X-Requested-With, X-Prototype-Version, X-CSRF-Token'
+    response.headers['Access-Control-Allow-Headers'] = 'Authorization,X-Requested-With, X-Prototype-Version, X-CSRF-Token'
   end
 
   post '/proxydump' do
