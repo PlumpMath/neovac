@@ -33,7 +33,7 @@ class Web < Sinatra::Base
 
   def authorized?
     @auth ||= Rack::Auth::Basic::Request.new(request.env)
-    puts @auth.credentials.inspect
+    puts @auth.inspect
     @auth.provided? and @auth.basic? and @auth.credentials and is_herokai? @auth.credentials[1]
   end
 
@@ -43,7 +43,9 @@ class Web < Sinatra::Base
       user= heroku.get_user
       user.body['email'].end_with? "@heroku.com"
       return true
-    rescue 
+    rescue  Exception => e  
+      puts e.message  
+      puts e.backtrace.inspect  
       return false
     end
   end
