@@ -34,7 +34,7 @@ class Web < Sinatra::Base
   def authorized?
     @auth ||= Rack::Auth::Basic::Request.new(request.env)
     puts @auth.inspect
-    puts "cres" + @auth.credentials
+    puts "cres" + @auth.credentials.inspect
     @auth.provided? and @auth.basic? and @auth.credentials and is_herokai? @auth.credentials[1]
   end
 
