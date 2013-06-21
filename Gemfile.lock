@@ -10,6 +10,15 @@ GIT
       rake (>= 0.8.7)
       rubyzip (>= 0.9.7)
 
+GIT
+  remote: git://github.com/heroku/heroku.rb
+  revision: bc5a645a98f2e50136754b0d85e76797dc6f68eb
+  branch: v3
+  specs:
+    heroku-api (0.3.5)
+      excon (~> 0.16.4)
+      multi_json
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -17,10 +26,8 @@ GEM
     ethon (0.5.12)
       ffi (>= 1.3.0)
       mime-types (~> 1.18)
-    excon (0.23.0)
+    excon (0.16.10)
     ffi (1.8.1)
-    heroku-api (0.3.12)
-      excon (~> 0.23.0)
     httpclient (2.3.3)
     iron_core (0.6.2)
       rest (>= 2.2.0)
@@ -56,7 +63,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  heroku-api
+  heroku-api!
   iron_mq
   logfmt
   neography!
