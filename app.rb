@@ -55,21 +55,21 @@ puts heroku.inspect
 
   get '/app_id/:id.json' do
     protected!
-    content_type "application/json"
+    content_type :json 
     results= $neoReader.get_xids_by_app_id params[:id]
     results.to_json
   end
 
   get '/request_id/:id.json' do
     protected!
-    content_type "application/json"
+    content_type :json 
     results= $neoReader.get_xid params[:id]
     results.to_json
   end
 
   get '/app/:name.json' do
     protected!
-    content_type "application/json"
+    content_type :json 
     @results = $neoReader.get_xids_by_app_name params[:name]
     @results.to_json
   end
