@@ -232,12 +232,7 @@ class Neo
                                               xid_node, 
                                               count)
           count = count + 4
-          if count >= 20
-            @neo.batch *ops
-            ops = []
-            count = 0
-          end
-        end
+       end
         puts  ops.inspect 
         @neo.batch *ops
     end
@@ -353,6 +348,14 @@ class Neo
     end
   end
 
+  def create_metric_node_clean(metric)
+    moitor "create_metric_node_clean" do
+      metric.gsub!(/[^0-9]/,'')
+      return @neo.create_node("val" => metric.to_f)
+    end
+  end
+    
+
   def create_metric_nodes_batched(metrics,xid_node)
     monitor "create_metric_nodes_batched" do
       ops = []
@@ -367,10 +370,11 @@ class Neo
   def create_metric_node_batch(metric_name,value,timestamp,at,xid_node,count)
     metric_type_node = query_metric_type_node(metric_name) || create_metric_type_node(metric_name)
     comp_node = query_comp_node(at) || create_comp_node(at) 
-    return [[:create_node,{"val" => value}],
-      [:create_relationship, "recorded",xid_node,"{#{count}}"],
-      [:create_relationship, "instance_of",metric_type_node,"{#{count}}"],
-      [:create_relationship, "caused",comp_node,"{#{count}}"]]
+    metric = create_metric_node_clean(value)
+    return [
+      [:create_relationship, "recorded",xid_node,metric],
+      [:create_relationship, "instance_of",metric_type_node,metric],
+      [:create_relationship, "caused",comp_node,metric]]
 
   end
 
