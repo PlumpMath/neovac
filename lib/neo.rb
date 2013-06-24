@@ -233,6 +233,7 @@ class Neo
                                               count)
           count = count + 4
         end
+        puts  ops.inspect 
         @neo.batch *ops
     end
   end
