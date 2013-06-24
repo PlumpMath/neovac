@@ -223,6 +223,7 @@ class Neo
         gen_node = create_generation_node(current_gen)
         link_generation(gen_node,xid_node)
         count = 0
+        ops = []
         metrics.each do | metric_hash |
           ops.concat create_metric_node_batch(metric_hash[:name],
                                               metric_hash[:value], 
