@@ -231,6 +231,9 @@ class Neo
                                               metric_hash[:at], 
                                               xid_node, 
                                               count)
+          @neo.batch *ops
+          puts "putted" 
+          ops = []
           count = count + 4
        end
         puts  ops.inspect 
