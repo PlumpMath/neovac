@@ -349,7 +349,7 @@ class Neo
   end
 
   def create_metric_node_clean(metric)
-    moitor "create_metric_node_clean" do
+    monitor "create_metric_node_clean" do
       metric.gsub!(/[^0-9]/,'')
       return @neo.create_node("val" => metric.to_f)
     end
