@@ -232,6 +232,7 @@ class Neo
                                               count)
           count = count + 4
         end
+        @neo.batch *ops
     end
   end
 
