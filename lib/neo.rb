@@ -38,7 +38,6 @@ class Neo
 
   def work(queue_name)
     queue = @iron.queue(queue_name)
-    #cluser_queue = iron.queue("cluster")
     Thread.current[:source] = "worker.#{queue_name}"
     while true
       queue.poll do |msg|
@@ -180,7 +179,6 @@ class Neo
       header = parts[0]
       logs = parts[1]
       hash = parse_log_header header
-      hash[:message] = parts[1]
       result = hash.merge Logfmt.parse logs
       measure("parse_logfmt.valid_log",1)
     end
@@ -233,7 +231,6 @@ class Neo
           count = count + 4
         end
     end
-
   end
 
   def add_log(logHash)
@@ -365,6 +362,7 @@ class Neo
       [:create_relationship, "recorded",xid_node,"{#{count}}"],
       [:create_relationship, "instance_of",metric_type_node,"{#{count}}"],
       [:create_relationship, "caused",comp_node,"{#{count}}"]]
+
   end
 
   def create_metric_type_node(metric,params={})

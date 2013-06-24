@@ -100,12 +100,12 @@ puts heroku.inspect
     end
   end
 
-  # post '/' do
- #  strio = StringIO.new request.body.read
- ##   Thread.new do
- #     process_log(strio)
- #   end
- # end
+  post '/' do
+    strio = StringIO.new request.body.read
+    Thread.new do
+      process_log(strio)
+    end
+  end
 
   def process_log(strio)
     monitor "process_log" do
