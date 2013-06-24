@@ -115,7 +115,7 @@ class Neo
         raw_metric_temp.each do |key, val|
           metric_temp = {}
           metric_temp[:name] = key
-          metric_temp[:value] = value
+          metric_temp[:value] = val 
           metric_temp[:timestamp] = logfmt[:timestamp]
           metric_temp[:request_id] = request_id
           metric_temp[:at] = logfmt["at"]
