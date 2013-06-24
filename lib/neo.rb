@@ -44,7 +44,7 @@ class Neo
         measure "#{queue_name}.queue.got", 1
         Thread.current[:request_id] = SecureRandom.urlsafe_base64(8)
         metrics = clear_request_queue msg.body
-        add_metrics metrics msg.body  
+        add_metrics metrics, msg.body  
       end
     end
   end
