@@ -113,6 +113,7 @@ class Neo
         logfmt = parse_logfmt msg.body
         raw_metric_temp = filter_metrics logfmt
         raw_metric_temp.each do |key, val|
+          metric_temp = {}
           metric_temp[:name] = key
           metric_temp[:value] = value
           metric_temp[:timestamp] = logfmt[:timestamp]
