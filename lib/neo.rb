@@ -355,7 +355,7 @@ class Neo
       metrics.each do |key,val|
         ops.concat create_metric_node_batch(key,val,xid_node,count)
       count = count + 4
-        if count == > 20
+        if count >= 20
           @neo.batch *ops
           ops = []
           count = 0
