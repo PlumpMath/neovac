@@ -125,8 +125,9 @@ class Neo
       end
 
       request_queue.delete_queue
+  
+      return metrics
     end
-    return metrics
   end
 
   def current_gen
